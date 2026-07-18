@@ -1,27 +1,21 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base
-from core.config import config
+from sqlalchemy.ext.declarative import declarative_base
 
-# สร้าง Engine สำหรับเชื่อมต่อ Database
-# (check_same_thread=False จำเป็นสำหรับ SQLite เมื่อบอททำงานแบบหลายคำสั่งพร้อมกัน)
+# 1. สร้าง Base ไว้ตรงนี้ เพื่อให้ models.py มาเรียกใช้ได้
+Base = declarative_base()
+
+# 2. ตั้งค่าการเชื่อมต่อ SQLite
+SQLALCHEMY_DATABASE_URL = "sqlite:///./slips_data.db"
 engine = create_engine(
-    config.DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in config.DATABASE_URL else {}
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
-
-# สร้าง Session Factory สำหรับเปิดการเชื่อมต่อ (Transaction) ไปยัง DB
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    """ฟังก์ชันสำหรับสร้างตารางทั้งหมดที่ออกแบบไว้ใน models.py"""
+    # 3. 🛑 แก้ปัญหา Circular Import: ย้ายการเรียก models มาไว้ "ข้างใน" ฟังก์ชันนี้แทน
+    import database.models
+    
+    # 4. สั่งสร้างตาราง
     Base.metadata.create_all(bind=engine)
     print("✅ สร้างตารางและเชื่อมต่อ Database สำเร็จ!")
-
-def get_db():
-    """Generator สำหรับเรียกใช้ Session และปิดการเชื่อมต่ออัตโนมัติเพื่อป้องกัน DB ล็อก"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

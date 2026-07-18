@@ -1,9 +1,8 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-def get_approval_keyboard(qr_ref: str):
-    # Telegram บังคับว่า Callback data ห้ามยาวเกิน 64 ตัวอักษร
-    # เราจึงตัดเอาแค่รหัสสั้นๆ มาเป็นตัวอ้างอิงเวลาแอดมินกดปุ่ม
-    short_ref = qr_ref[:40] if len(qr_ref) > 40 else qr_ref
+def get_approval_keyboard(batch_id: str):
+    # ใช้ batch_id เป็นตัวอ้างอิงแทน
+    short_ref = batch_id[:40] if len(batch_id) > 40 else batch_id
     
     keyboard = [
         [
