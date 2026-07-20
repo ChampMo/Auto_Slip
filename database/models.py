@@ -35,6 +35,7 @@ class UsedQR(Base):
     __tablename__ = 'used_qrs'
     qr_ref = Column(String(100), primary_key=True, index=True)
     batch_id = Column(String(100)) # โยงไปหาว่าอยู่ใน Transaction กลุ่มไหน
+    api_raw_data = Column(String, nullable=True) # เก็บเป็นก้อน JSON Text
 
 class AuditLog(Base):
     __tablename__ = 'audit_logs'

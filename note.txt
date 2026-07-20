@@ -1,0 +1,43 @@
+{
+  "payload": "00390006000001010300402180161962108412232615102TH91041D53",
+  "transRef": "016196210841223261",
+  "date": "2026-07-15T21:08:41+07:00",
+  "countryCode": "TH",
+  "amount": {
+    "amount": 113,
+    "local": {
+      "amount": 113,
+      "currency": "764"
+    }
+  },
+  "fee": 0,
+  "ref1": "012PAYIEBKFLJSMR4BYA",
+  "ref2": "012PAYIEBKFLJSMR4BYA",
+  "ref3": "",
+  "sender": {
+    "bank": {
+      "id": "004",
+      "name": "ธนาคารกสิกรไทย",
+      "short": "KBANK"
+    },
+    "account": {
+      "name": {
+        "th": "นาย พชรพล เ",
+        "en": "MR. PHACHARAPHON A"
+      },
+      "bank": {
+        "type": "BANKAC",
+        "account": "xxx-x-x4483-x"
+      }
+    }
+  },
+  "receiver": {
+    "bank": {},
+    "account": {
+      "name": {
+        "th": "TikTok Shop (",
+        "en": "TIKTOK SHOP ("
+      }
+    }
+  }
+}
