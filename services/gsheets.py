@@ -71,10 +71,9 @@ class GoogleSheetsService:
             return float(val)
         except (ValueError, TypeError):
             return 0.0
-        
-    def _apply_styles(self, worksheet: gspread.Worksheet):
-        """จัดรูปแบบตารางหลักและ Summary"""
 
+    def _apply_styles(self, worksheet: gspread.Worksheet):
+        """จัดรูปแบบตารางหลักและ Summary โดยใช้ Batch Request เพื่อประสิทธิภาพสูงสุด"""
         header_style = {
             "backgroundColor": {
                 "red": 1.0,
@@ -107,6 +106,18 @@ class GoogleSheetsService:
             "verticalAlignment": "MIDDLE",
         }
 
+        purple_bold_style = {
+            "textFormat": {
+                "foregroundColor": {
+                    "red": 0.5,
+                    "green": 0.0,
+                    "blue": 0.5,
+                },
+                "bold": True,
+            },
+            "horizontalAlignment": "CENTER",
+        }
+
         border_style = {
             "borders": {
                 "top": {"style": "SOLID"},
@@ -119,57 +130,26 @@ class GoogleSheetsService:
         }
 
         try:
-            last_row = len(worksheet.get_all_values())
+            last_row = max(len(worksheet.get_all_values()), 2)
 
-            # ======================
-            # ตารางหลัก A:H
-            # ======================
-            worksheet.format("A1:H1", header_style)
+            # รวบรวมคำสั่งจัดรูปแบบทั้งหมดส่งไปใน batch เดียว
+            formats = [
+                {"range": "A1:H1", "format": header_style},
+                {"range": f"C2:C{last_row}", "format": purple_bold_style},
+                {"range": f"G2:G{last_row}", "format": purple_bold_style},
+                {"range": f"A1:H{last_row}", "format": border_style},
+                {"range": "L1:N1", "format": header_style},
+                {"range": "L4:N4", "format": sub_header_style},
+                {"range": "L8:N8", "format": sub_header_style},
+                {"range": "L12:N13", "format": sub_header_style},
+                {"range": "L1:N1000", "format": border_style},
+            ]
 
-            worksheet.format(
-                "C2:C1000",
-                {
-                    "textFormat": {
-                        "foregroundColor": {
-                            "red": 0.5,
-                            "green": 0.0,
-                            "blue": 0.5,
-                        },
-                        "bold": True,
-                    },
-                    "horizontalAlignment": "CENTER",
-                },
-            )
-
-            worksheet.format(
-                "G2:G1000",
-                {
-                    "textFormat": {
-                        "foregroundColor": {
-                            "red": 0.5,
-                            "green": 0.0,
-                            "blue": 0.5,
-                        },
-                        "bold": True,
-                    },
-                    "horizontalAlignment": "CENTER",
-                },
-            )
-
-            worksheet.format(f"A1:H{last_row}", border_style)
-
-            # ======================
-            # Summary L:N
-            # ======================
-            worksheet.format("L1:N1", header_style)
-            worksheet.format("L4:N4", sub_header_style)
-            worksheet.format("L8:N8", sub_header_style)
-            worksheet.format("L12:N13", sub_header_style)
-
-            worksheet.format("L1:N1000", border_style)
+            worksheet.batch_format(formats)
+            logger.info("🎨 ลงสไตล์ชีทสำเร็จ")
 
         except Exception as e:
-            logger.warning(f"Formatting failed: {e}")
+            logger.error(f"Formatting failed: {e}", exc_info=True)
 
     def update_daily_summary(self, worksheet: gspread.Worksheet):
         """สร้าง/อัปเดต ตารางสรุปยอดประจำวัน ที่ Column L"""
@@ -183,7 +163,6 @@ class GoogleSheetsService:
 
         # วนลูปอ่านข้อมูลข้าม Header (Row 1)
         for row in records[1:]:
-            # ป้องกัน IndexError โดยดึงค่าแบบปลอดภัยด้วย Index
             col_user_id = row[0] if len(row) > 0 else ""
             col_user_amt = row[1] if len(row) > 1 else ""
             col_trans_id = row[4] if len(row) > 4 else ""
@@ -200,7 +179,6 @@ class GoogleSheetsService:
                 amt = self._parse_float(col_trans_amt)
                 trans_total += amt
 
-                # เก็บสถิติลูกค้า
                 if col_trans_id not in customers:
                     customers[col_trans_id] = {"count": 0, "total": 0.0}
 
@@ -234,7 +212,7 @@ class GoogleSheetsService:
         worksheet.update(f"L1:N{end_row}", summary)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
-        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ใช้ Header 8 คอลัมน์เดิม)"""
+        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน พร้อมจัดรูปแบบสไตล์"""
         try:
             spreadsheet = self._get_dynamic_spreadsheet()
             now = datetime.now()
@@ -249,7 +227,7 @@ class GoogleSheetsService:
                     title=sheet_name, rows=1000, cols=20
                 )
 
-                # สร้าง Header ให้ชีทใหม่ตามที่คุณกำหนด
+                # สร้าง Header ให้ชีทใหม่
                 headers = [
                     "Trans ID", "VIP WE รับ", "Time", "Agent",
                     "Trans ID", "VIP 12 รับ P", "Time", "Agent"
@@ -265,9 +243,8 @@ class GoogleSheetsService:
 
             time_str = now.strftime("%H:%M:%S")
 
-            # กำหนดข้อมูลที่จะนำลง Sheet
             user_id = txn.chat_user_id or txn.sender_names or txn.chat_fullname or "-"
-            
+
             trans_identifier = (
                 txn.chat_trans_id
                 or txn.chat_user_id
@@ -292,10 +269,13 @@ class GoogleSheetsService:
 
             worksheet.append_row(row)
 
-            # อัปเดต สรุปยอดรายวัน
+            # 1. อัปเดต Summary รายวัน
             self.update_daily_summary(worksheet)
 
-            logger.info(f"✅ บันทึกข้อมูลและอัปเดต Summary สำเร็จ (วันที่ {sheet_name})")
+            # 2. จัดสไตล์สี / เส้นขอบตาราง
+            self._apply_styles(worksheet)
+
+            logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (วันที่ {sheet_name})")
             return True, ""
 
         except Exception as e:
