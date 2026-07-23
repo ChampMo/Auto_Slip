@@ -73,80 +73,29 @@ class GoogleSheetsService:
             return 0.0
 
     def _apply_styles(self, worksheet: gspread.Worksheet):
-        """จัดรูปแบบตารางหลักและ Summary โดยใช้ Batch Request เพื่อประสิทธิภาพสูงสุด"""
-        header_style = {
-            "backgroundColor": {
-                "red": 1.0,
-                "green": 0.95,
-                "blue": 0.4,
-            },
-            "textFormat": {
-                "bold": True,
-                "foregroundColor": {
-                    "red": 0.0,
-                    "green": 0.0,
-                    "blue": 0.0,
-                },
-                "fontSize": 10,
-            },
-            "horizontalAlignment": "CENTER",
-            "verticalAlignment": "MIDDLE",
-        }
-
-        sub_header_style = {
-            "backgroundColor": {
-                "red": 0.95,
-                "green": 0.95,
-                "blue": 0.95,
-            },
-            "textFormat": {
-                "bold": True,
-            },
-            "horizontalAlignment": "CENTER",
-            "verticalAlignment": "MIDDLE",
-        }
-
-        purple_bold_style = {
-            "textFormat": {
-                "foregroundColor": {
-                    "red": 0.5,
-                    "green": 0.0,
-                    "blue": 0.5,
-                },
-                "bold": True,
-            },
-            "horizontalAlignment": "CENTER",
-        }
-
-        border_style = {
-            "borders": {
-                "top": {"style": "SOLID"},
-                "bottom": {"style": "SOLID"},
-                "left": {"style": "SOLID"},
-                "right": {"style": "SOLID"},
-                "innerHorizontal": {"style": "SOLID"},
-                "innerVertical": {"style": "SOLID"},
-            }
-        }
-
+        """ใส่เส้นขอบตารางเฉพาะบริเวณที่มีข้อมูล"""
         try:
-            last_row = max(len(worksheet.get_all_values()), 2)
+            # 1. หาแถวล่าสุดที่มีข้อมูลจริง
+            last_row = len(worksheet.col_values(1))
+            if last_row < 1:
+                return
 
-            # รวบรวมคำสั่งจัดรูปแบบทั้งหมดส่งไปใน batch เดียว
-            formats = [
-                {"range": "A1:H1", "format": header_style},
-                {"range": f"C2:C{last_row}", "format": purple_bold_style},
-                {"range": f"G2:G{last_row}", "format": purple_bold_style},
-                {"range": f"A1:H{last_row}", "format": border_style},
-                {"range": "L1:N1", "format": header_style},
-                {"range": "L4:N4", "format": sub_header_style},
-                {"range": "L8:N8", "format": sub_header_style},
-                {"range": "L12:N13", "format": sub_header_style},
-                {"range": "L1:N1000", "format": border_style},
-            ]
+            # 2. รูปแบบเส้นขอบ
+            border_format = {
+                "borders": {
+                    "top": {"style": "SOLID"},
+                    "bottom": {"style": "SOLID"},
+                    "left": {"style": "SOLID"},
+                    "right": {"style": "SOLID"},
+                    "innerHorizontal": {"style": "SOLID"},
+                    "innerVertical": {"style": "SOLID"},
+                }
+            }
 
-            worksheet.batch_format(formats)
-            logger.info("🎨 ลงสไตล์ชีทสำเร็จ")
+            # 3. ตีเส้นเฉพาะ A1 จนถึงคอลัมน์ H ในแถวล่าสุดที่มีข้อความ
+            worksheet.format(f"A1:H{last_row}", border_format)
+            
+            logger.info(f"📐 ใส่เส้นตารางเฉพาะแถวที่มีข้อมูล (A1:H{last_row}) สำเร็จ")
 
         except Exception as e:
             logger.error(f"Formatting failed: {e}", exc_info=True)
@@ -212,7 +161,7 @@ class GoogleSheetsService:
         worksheet.update(f"L1:N{end_row}", summary)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
-        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน พร้อมจัดรูปแบบสไตล์"""
+        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
         try:
             spreadsheet = self._get_dynamic_spreadsheet()
             now = datetime.now()
@@ -232,7 +181,7 @@ class GoogleSheetsService:
                     "Trans ID", "VIP WE รับ", "Time", "Agent",
                     "Trans ID", "VIP 12 รับ P", "Time", "Agent"
                 ]
-                worksheet.append_row(headers)
+                worksheet.update("A1:H1", [headers])
 
                 # ลบ Sheet1 ตั้งต้นออก (ถ้ามี)
                 try:
@@ -241,10 +190,12 @@ class GoogleSheetsService:
                 except Exception:
                     pass
 
-            time_str = now.strftime("%H:%M:%S")
+            # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
+            formatted_time = now.strftime("%H:%M")
+            if formatted_time.startswith("0"):
+                formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
 
             user_id = txn.chat_user_id or txn.sender_names or txn.chat_fullname or "-"
-
             trans_identifier = (
                 txn.chat_trans_id
                 or txn.chat_user_id
@@ -252,22 +203,30 @@ class GoogleSheetsService:
                 or txn.chat_fullname
                 or "-"
             )
-            trans_amount = txn.api_total_amount or txn.chat_amount or "-"
+            
+            # แปลงยอดเงินเป็น float เพื่อให้ Google Sheets นำไปจัดรูปแบบตัวเลข #,##0.00 ได้ถูก
+            user_amt = self._parse_float(txn.chat_amount)
+            trans_amt = self._parse_float(txn.api_total_amount or txn.chat_amount)
 
             row = [
                 # USER
                 user_id,
-                txn.chat_amount or "-",
-                time_str,
+                user_amt if user_amt > 0 else "-",
+                formatted_time,
                 txn.chat_bank or "-",
                 # TRANS
                 trans_identifier,
-                trans_amount,
-                time_str,
+                trans_amt if trans_amt > 0 else "-",
+                formatted_time,
                 txn.chat_bank or "-",
             ]
 
-            worksheet.append_row(row)
+            # หาแถวว่างถัดไปเฉพาะคอลัมน์ A
+            col_a_values = worksheet.col_values(1)
+            next_row = len(col_a_values) + 1
+
+            # เขียนข้อมูลเจาะจงเฉพาะช่วง A{next_row}:H{next_row}
+            worksheet.update(f"A{next_row}:H{next_row}", [row])
 
             # 1. อัปเดต Summary รายวัน
             self.update_daily_summary(worksheet)
@@ -275,7 +234,7 @@ class GoogleSheetsService:
             # 2. จัดสไตล์สี / เส้นขอบตาราง
             self._apply_styles(worksheet)
 
-            logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (วันที่ {sheet_name})")
+            logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (Row {next_row})")
             return True, ""
 
         except Exception as e:
