@@ -24,6 +24,18 @@ services:
     # นำ .env โยนเข้าไปใน Container ด้วย
     env_file:
       - .env
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com    # ใช้อีเมลนี้ล็อกอินเข้าเว็บ (เปลี่ยนได้)
+      PGADMIN_DEFAULT_PASSWORD: password1234    # ใช้รหัสผ่านนี้ล็อกอินเข้าเว็บ (เปลี่ยนได้)
+    ports:
+      - "5050:80"                               # เราจะเข้าเว็บผ่านพอร์ต 5050
+    depends_on:
+      - db
 
 volumes:
   pgdata:

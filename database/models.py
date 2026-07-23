@@ -20,6 +20,7 @@ class Transaction(Base):
     chat_trans_id = Column(String(50), nullable=True)      
     chat_fullname = Column(String(100), nullable=True)     
     
+    chat_bank = Column(String(50), nullable=True)
     chat_amount = Column(Float, nullable=True) 
     
     status = Column(String(20), default="pending")

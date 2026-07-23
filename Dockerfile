@@ -4,6 +4,7 @@ FROM python:3.10-slim
 # ตั้งค่า Working Directory ใน Container
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y libzbar0
 # คัดลอกไฟล์ requirements.txt ไปก่อนเพื่อติดตั้ง Dependencies
 COPY requirements.txt .
 

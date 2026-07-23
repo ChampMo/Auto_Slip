@@ -5,9 +5,20 @@ from database.models import Transaction, UsedQR
 from database.crud import get_transaction, add_audit_log
 
 def extract_data_from_caption(caption: str, is_user_group: bool):
-    data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None}
+    # 👇 1. เพิ่ม "bank": None ไว้ใน Dictionary เริ่มต้น
+    data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None, "bank": None}
+    
     amount_match = re.search(r'(?i)AMOUNT\s*(?:[:]\s*THB|THB\s*[:])\s*([0-9,.]+)', caption)
     if amount_match: data["amount"] = float(amount_match.group(1).replace(',', ''))
+
+    # 👇 2. ลอจิกดึงชื่อธนาคารจากบรรทัดที่ 2
+    if caption:
+        lines = caption.strip().split('\n')
+        if len(lines) >= 2:
+            second_line = lines[1].strip() # ดึงบรรทัดที่ 2 (เช่น TTB ANUCHA)
+            if second_line:
+                # ตัดเอาเฉพาะคำแรกสุด (TTB)
+                data["bank"] = second_line.split()[0]
 
     if is_user_group:
         user_match = re.search(r'(?i)User\s*:\s*(\d+)', caption)
@@ -17,6 +28,7 @@ def extract_data_from_caption(caption: str, is_user_group: bool):
         if trans_match: data["trans_id"] = trans_match.group(1)
         name_match = re.search(r'(?is)FULL\s*NAME\s*:\s*(.+?)(?=(?:AMOUNT|$))', caption)
         if name_match: data["fullname"] = name_match.group(1).strip()
+        
     return data
 
 def generate_batch_id(qr_list: list):
@@ -29,7 +41,7 @@ def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str,
     is_user_group = "user" in caption.lower()
     extracted = extract_data_from_caption(caption, is_user_group)
 
-    # 🛑 เช็คซ้ำระดับแยกใบ (ถ้าใบใดใบหนึ่งเคยถูกใช้ใน Batch อื่นไปแล้ว = ซ้ำทั้งก้อน)
+    # 🛑 เช็คซ้ำระดับแยกใบ
     for qr in qr_list:
         used = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
         if used and used.batch_id != batch_id:
@@ -47,6 +59,10 @@ def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str,
             return "duplicate", txn
         
         if txn.status == "pending":
+            # 👇 3. อัปเดตธนาคารกรณีที่มี Transaction ค้างอยู่แล้ว
+            if extracted.get("bank") and not txn.chat_bank:
+                txn.chat_bank = extracted["bank"]
+                
             if is_user_group:
                 txn.g_user_chat_id = str(chat_id)
                 txn.g_user_msg_id = str(msg_id)
@@ -67,6 +83,10 @@ def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str,
     else:
         # บันทึกกลุ่มใหม่
         new_txn = Transaction(batch_id=batch_id, category="VIP_WE", status="pending")
+        
+        # 👇 4. ยัดชื่อธนาคารใส่ตอนสร้าง Transaction ใหม่
+        new_txn.chat_bank = extracted.get("bank")
+        
         if is_user_group:
             new_txn.g_user_chat_id = str(chat_id)
             new_txn.g_user_msg_id = str(msg_id)
