@@ -1,57 +1,40 @@
 import requests
 from core.config import config
+import logging
 
-def verify_slip(qr_payload: str) -> dict:
-    # URL ตาม Document (v1/verify)
-    url = "https://api.easyslip.com/v1/verify" 
-    
-    headers = {
-        "Authorization": f"Bearer {config.EASYSLIP_API_KEY}"
-    }
-    
-    # ส่งเป็น params ตามตัวอย่างในหน้าเว็บ
-    params = {
-        "payload": qr_payload
-    }
-    
+logger = logging.getLogger(__name__)
+
+def verify_slip(qr_code: str) -> dict:
+    """ตรวจสอบสลิปผ่าน EasySlip API"""
     try:
-        # 🛑 จุดสำคัญ: เปลี่ยนมาใช้ requests.get()
-        response = requests.get(url, headers=headers, params=params)
-        
-        result = response.json()
-        
-        # เช็ค status จาก API ว่าเท่ากับ 200 หรือไม่ (ตาม Document)
-        if result.get("status") == 200:
-            data = result.get("data", {})
-            
-            # 🛑 จุดสำคัญ: โครงสร้าง Amount ของเค้าซ้อนกัน 2 ชั้น
-            amount_data = data.get("amount", {})
-            if isinstance(amount_data, dict):
-                amount = amount_data.get("amount", 0.0)
-            else:
-                amount = amount_data
-            
-            # ดึงชื่อคนโอน
-            sender = "ไม่ระบุชื่อ"
-            if "sender" in data and "account" in data["sender"] and "name" in data["sender"]["account"]:
-                name_data = data["sender"]["account"]["name"]
-                sender = name_data.get("th", name_data.get("en", "ไม่ระบุชื่อ"))
-                
-            return {
-                "success": True,
-                "amount": float(amount),
-                "sender": sender,
-                "raw_data": data
-            }
-        else:
-            # กรณี Error จาก API
-            return {
-                "success": False,
-                "error": result.get("message", "API Error")
-            }
-            
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
+        url = "https://developer.easyslip.com/api/v1/verify" # ปรับ URL ตามที่คุณใช้งานจริง
+        headers = {
+            "Authorization": f"Bearer {config.EASYSLIP_API_KEY}",
+            "Content-Type": "application/json"
         }
+        payload = {"payload": qr_code}
+        
+        response = requests.post(url, headers=headers, json=payload)
+        data = response.json()
+        
+        # 💡 ดักจับกรณี API แจ้งว่าโควต้าหมด หรือ Error อื่นๆ
+        if response.status_code != 200 or data.get("status") != 200:
+            error_msg = data.get("message", str(data))
+            
+            # เช็กคีย์เวิร์ดที่ EasySlip มักจะส่งมาเวลาโควต้าหมด
+            if any(keyword in error_msg.lower() for keyword in ["limit", "quota", "exceed", "credit", "package"]):
+                return {"success": False, "error": "QUOTA_EXCEEDED"}
+                
+            return {"success": False, "error": f"API Error: {error_msg}"}
+
+        # กรณีสำเร็จ
+        return {
+            "success": True,
+            "amount": data["data"]["amount"],
+            "sender": data["data"]["sender"]["name"],
+            "raw_data": data["data"]
+        }
+        
+    except Exception as e:
+        logger.error(f"EasySlip API Exception: {e}")
+        return {"success": False, "error": f"Connection Error: {str(e)}"}

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: autoslip_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  bot:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      - ./.env:/app/.env
+      - ./credentials.json:/app/credentials.json
+    # นำ .env โยนเข้าไปใน Container ด้วย
+    env_file:
+      - .env
+
+volumes:
+  pgdata:
