@@ -71,6 +71,105 @@ class GoogleSheetsService:
             return float(val)
         except (ValueError, TypeError):
             return 0.0
+        
+    def _apply_styles(self, worksheet: gspread.Worksheet):
+        """จัดรูปแบบตารางหลักและ Summary"""
+
+        header_style = {
+            "backgroundColor": {
+                "red": 1.0,
+                "green": 0.95,
+                "blue": 0.4,
+            },
+            "textFormat": {
+                "bold": True,
+                "foregroundColor": {
+                    "red": 0.0,
+                    "green": 0.0,
+                    "blue": 0.0,
+                },
+                "fontSize": 10,
+            },
+            "horizontalAlignment": "CENTER",
+            "verticalAlignment": "MIDDLE",
+        }
+
+        sub_header_style = {
+            "backgroundColor": {
+                "red": 0.95,
+                "green": 0.95,
+                "blue": 0.95,
+            },
+            "textFormat": {
+                "bold": True,
+            },
+            "horizontalAlignment": "CENTER",
+            "verticalAlignment": "MIDDLE",
+        }
+
+        border_style = {
+            "borders": {
+                "top": {"style": "SOLID"},
+                "bottom": {"style": "SOLID"},
+                "left": {"style": "SOLID"},
+                "right": {"style": "SOLID"},
+                "innerHorizontal": {"style": "SOLID"},
+                "innerVertical": {"style": "SOLID"},
+            }
+        }
+
+        try:
+            last_row = len(worksheet.get_all_values())
+
+            # ======================
+            # ตารางหลัก A:H
+            # ======================
+            worksheet.format("A1:H1", header_style)
+
+            worksheet.format(
+                "C2:C1000",
+                {
+                    "textFormat": {
+                        "foregroundColor": {
+                            "red": 0.5,
+                            "green": 0.0,
+                            "blue": 0.5,
+                        },
+                        "bold": True,
+                    },
+                    "horizontalAlignment": "CENTER",
+                },
+            )
+
+            worksheet.format(
+                "G2:G1000",
+                {
+                    "textFormat": {
+                        "foregroundColor": {
+                            "red": 0.5,
+                            "green": 0.0,
+                            "blue": 0.5,
+                        },
+                        "bold": True,
+                    },
+                    "horizontalAlignment": "CENTER",
+                },
+            )
+
+            worksheet.format(f"A1:H{last_row}", border_style)
+
+            # ======================
+            # Summary L:N
+            # ======================
+            worksheet.format("L1:N1", header_style)
+            worksheet.format("L4:N4", sub_header_style)
+            worksheet.format("L8:N8", sub_header_style)
+            worksheet.format("L12:N13", sub_header_style)
+
+            worksheet.format("L1:N1000", border_style)
+
+        except Exception as e:
+            logger.warning(f"Formatting failed: {e}")
 
     def update_daily_summary(self, worksheet: gspread.Worksheet):
         """สร้าง/อัปเดต ตารางสรุปยอดประจำวัน ที่ Column L"""
@@ -135,7 +234,7 @@ class GoogleSheetsService:
         worksheet.update(f"L1:N{end_row}", summary)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
-        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน"""
+        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ใช้ Header 8 คอลัมน์เดิม)"""
         try:
             spreadsheet = self._get_dynamic_spreadsheet()
             now = datetime.now()
@@ -150,7 +249,7 @@ class GoogleSheetsService:
                     title=sheet_name, rows=1000, cols=20
                 )
 
-                # สร้าง Header ให้ชีทใหม่
+                # สร้าง Header ให้ชีทใหม่ตามที่คุณกำหนด
                 headers = [
                     "Trans ID", "VIP WE รับ", "Time", "Agent",
                     "Trans ID", "VIP 12 รับ P", "Time", "Agent"
@@ -168,6 +267,7 @@ class GoogleSheetsService:
 
             # กำหนดข้อมูลที่จะนำลง Sheet
             user_id = txn.chat_user_id or txn.sender_names or txn.chat_fullname or "-"
+            
             trans_identifier = (
                 txn.chat_trans_id
                 or txn.chat_user_id
