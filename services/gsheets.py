@@ -100,6 +100,31 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Formatting failed: {e}", exc_info=True)
 
+    def _format_header(self, worksheet: gspread.Worksheet):
+        """จัดรูปแบบ Header"""
+
+        worksheet.format(
+            "A1:H1",
+            {
+                "backgroundColor": {
+                    "red": 0.26,
+                    "green": 0.52,
+                    "blue": 0.96
+                },
+                "textFormat": {
+                    "bold": True,
+                    "foregroundColor": {
+                        "red": 1,
+                        "green": 1,
+                        "blue": 1
+                    }
+                },
+                "horizontalAlignment": "CENTER"
+            }
+        )
+
+        worksheet.freeze(rows=1)
+
     def update_daily_summary(self, worksheet: gspread.Worksheet):
         """สร้าง/อัปเดต ตารางสรุปยอดประจำวัน ที่ Column L"""
         records = worksheet.get_all_values()
@@ -182,6 +207,9 @@ class GoogleSheetsService:
                     "Trans ID", "VIP 12 รับ P", "Time", "Agent"
                 ]
                 worksheet.update("A1:H1", [headers])
+
+                self._format_header(worksheet)
+                self._apply_styles(worksheet)
 
                 # ลบ Sheet1 ตั้งต้นออก (ถ้ามี)
                 try:
