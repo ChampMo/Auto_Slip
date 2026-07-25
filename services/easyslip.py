@@ -15,16 +15,14 @@ def verify_slip(qr_payload: str) -> dict:
     }
     
     try:
-        # 🛑 จุดสำคัญ: เปลี่ยนมาใช้ requests.get()
         response = requests.get(url, headers=headers, params=params)
-        
         result = response.json()
         
         # เช็ค status จาก API ว่าเท่ากับ 200 หรือไม่ (ตาม Document)
         if result.get("status") == 200:
             data = result.get("data", {})
             
-            # 🛑 จุดสำคัญ: โครงสร้าง Amount ของเค้าซ้อนกัน 2 ชั้น
+            # โครงสร้าง Amount
             amount_data = data.get("amount", {})
             if isinstance(amount_data, dict):
                 amount = amount_data.get("amount", 0.0)
@@ -44,14 +42,36 @@ def verify_slip(qr_payload: str) -> dict:
                 "raw_data": data
             }
         else:
-            # กรณี Error จาก API
+            # 🛑 ปรับปรุง UX: แปลง Error จาก API เป็นภาษาไทยให้ User เข้าใจง่าย
+            raw_error_msg = result.get("message", "").upper()
+            status_code = result.get("status")
+            
+            # ดักจับ Error ยอดฮิตและแปลความหมาย
+            if "QUOTA" in raw_error_msg or "EXCEEDED" in raw_error_msg:
+                user_friendly_msg = "⚠️ โควต้าการตรวจสอบสลิปหมด หรือแพ็กเกจ EasySlip หมดอายุแล้ว กรุณาต่ออายุแพ็กเกจ"
+                error_type = "QUOTA_EXCEEDED"
+            elif "UNAUTHORIZED" in raw_error_msg or status_code == 401:
+                user_friendly_msg = "🔒 การยืนยันตัวตนล้มเหลว (API Key ของ EasySlip ไม่ถูกต้อง)"
+                error_type = "UNAUTHORIZED"
+            elif "NOT FOUND" in raw_error_msg or "INVALID" in raw_error_msg:
+                user_friendly_msg = "❌ ไม่พบข้อมูลสลิปนี้ในระบบธนาคาร หรือ QR Code ไม่ถูกต้อง (อาจเป็นสลิปปลอม)"
+                error_type = "INVALID_SLIP"
+            elif "MAINTENANCE" in raw_error_msg:
+                user_friendly_msg = "🛠️ ระบบ API หรือธนาคารต้นทางกำลังปรับปรุงชั่วคราว"
+                error_type = "MAINTENANCE"
+            else:
+                user_friendly_msg = f"🚨 ระบบตรวจสอบขัดข้องจากทาง API (ข้อความ: {result.get('message')})"
+                error_type = "UNKNOWN_ERROR"
+
             return {
                 "success": False,
-                "error": result.get("message", "API Error")
+                "error": error_type, # คืนค่า Code สั้นๆ เผื่อเอาไปเขียน if-else ในไฟล์อื่น
+                "user_message": user_friendly_msg # คืนค่าข้อความภาษาไทยสวยๆ ไปแสดงผล
             }
             
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": "EXCEPTION",
+            "user_message": f"🌐 เกิดข้อผิดพลาดในการเชื่อมต่ออินเทอร์เน็ตหรือเซิร์ฟเวอร์: {str(e)}"
         }

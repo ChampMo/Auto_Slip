@@ -13,6 +13,7 @@ from database.models import UsedQR
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
+    print(f"👉 [DEBUG] ได้รับข้อความจากกลุ่มที่มี Chat ID คือ: {chat_id}")
     msg_id = update.message.message_id
     caption = update.message.caption or ""
     
@@ -45,6 +46,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 all_senders = []
                 api_success = True
                 error_msg = ""
+                user_error_msg = "" # 👈 เพิ่มตัวแปรสำหรับรับข้อความภาษาไทย
                 
                 # 🔄 ยิง API ตรวจสอบทีละใบและบวกยอดรวมกัน
                 for qr in qr_data_list:
@@ -53,16 +55,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         total_api_amount += api_result["amount"]
                         all_senders.append(api_result["sender"])
                         
-                        # 👇 --- โค้ดที่เพิ่มใหม่: ค้นหา UsedQR ใบนี้ แล้วยัด JSON ใส่เข้าไป ---
+                        # ค้นหา UsedQR ใบนี้ แล้วยัด JSON ใส่เข้าไป
                         used_qr = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
                         if used_qr:
-                            # แปลง Dictionary เป็นข้อความ JSON และรองรับภาษาไทย
                             used_qr.api_raw_data = json.dumps(api_result["raw_data"], ensure_ascii=False)
-                        # 👆 ----------------------------------------------------
                         
                     else:
                         api_success = False
-                        error_msg = api_result["error"]
+                        error_msg = api_result.get("error", "UNKNOWN_ERROR")
+                        # 👇 ดึงข้อความแจ้งเตือนภาษาไทยที่ส่งมาจาก verify_slip
+                        user_error_msg = api_result.get("user_message", f"⚠️ ระบบตรวจสอบสลิปขัดข้อง ({error_msg})")
                         break # ถ้าพังใบเดียว ให้ถือว่าล่มทั้งก้อนเลย
                 
                 if api_success:
@@ -74,24 +76,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     txn.api_total_amount = total_api_amount
                     txn.sender_names = sender_names_str
                     
-                    # 🔍 ---------------------------------------------
-                    # ลอจิกตรวจสอบชื่อ (เช็คเฉพาะชื่อจริง ไม่เอาคำนำหน้าและนามสกุล)
+                    # 🔍 ลอจิกตรวจสอบชื่อ (เช็คเฉพาะชื่อจริง ไม่เอาคำนำหน้าและนามสกุล)
                     is_name_match = True
                     if chat_name and chat_name.strip() != "-":
                         clean_name = chat_name.strip()
-                        # ตัดคำนำหน้าชื่อที่พบบ่อยออก
                         for p in ["นาย", "นางสาว", "น.ส.", "น.ส. ", "นาง"]:
                             if clean_name.startswith(p):
                                 clean_name = clean_name[len(p):].strip()
                                 break
                         
-                        # ดึงเฉพาะคำแรกสุด (ชื่อจริง)
                         first_name = clean_name.split()[0] if clean_name else ""
                         
-                        # ถ้าชื่อจริงจากแชท ไม่มีในชื่อที่โอนมาเลย -> ปฏิเสธ
                         if first_name and first_name not in sender_names_str:
                             is_name_match = False
-                    # ------------------------------------------------
                     
                     # เปรียบเทียบทั้ง ยอดเงิน และ ชื่อผู้โอน
                     if chat_amount == total_api_amount and is_name_match:
@@ -115,7 +112,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         add_audit_log(db, txn.batch_id, "auto_rejected_mismatch")
                         db.commit()
                         
-                        # สร้างข้อความแจ้งเตือนว่าผิดที่จุดไหน
                         reject_reason = ""
                         if chat_amount != total_api_amount:
                             reject_reason += f"❌ ยอดเงิน: ในสลิป `{total_api_amount}` | แจ้งมา `{chat_amount}`\n"
@@ -131,22 +127,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="Markdown"
                         )
                 else:
-                    # 💡 แยกแยะข้อความแจ้งเตือนตามประเภท Error
+                    # 👇 แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
                     keyboard = get_approval_keyboard(txn.batch_id)
                     
-                    if error_msg == "QUOTA_EXCEEDED":
-                        alert_text = (
-                            f"🚨 **แจ้งเตือนด่วน: โควต้า API ตรวจสอบสลิปหมด!** 🚨\n"
-                            f"แพ็กเกจ EasySlip ของคุณถูกใช้งานครบกำหนดแล้ว\n\n"
-                            f"👉 *ระหว่างนี้โปรดตรวจสอบยอดเงินในสลิปด้วยตัวเอง (Manual) และกดปุ่มด้านล่างเพื่อบันทึกยอดครับ*\n\n"
-                            f"💡 *แนะนำ: กรุณาต่ออายุแพ็กเกจ EasySlip เพื่อให้ระบบตรวจจับอัตโนมัติทำงานต่อ*"
-                        )
-                    else:
-                        alert_text = (
-                            f"⚠️ **ระบบตรวจสอบสลิปขัดข้อง**\n"
-                            f"สาเหตุ: `{error_msg}`\n\n"
-                            f"👉 *โปรดตรวจสอบสลิปทั้งหมดด้วยตัวเอง และกดปุ่มด้านล่างครับ*"
-                        )
+                    alert_text = (
+                        f"{user_error_msg}\n\n"
+                        f"👉 *โปรดตรวจสอบสลิปทั้งหมดด้วยตัวเอง (Manual) และกดปุ่มด้านล่างเพื่อดำเนินการต่อครับ*"
+                    )
 
                     await context.bot.send_message(
                         chat_id=target_chat_id,
@@ -161,9 +148,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    
-    # ❌ เอา await query.answer() บรรทัดนี้ออก เพื่อเก็บสิทธิ์ไว้ใช้โชว์ Popup ตอนที่พังครับ
-    
     action, short_ref = query.data.split('_', 1)
     
     from database.models import Transaction
@@ -174,14 +158,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
         
         if txn:
-            # 🛡️ UX ที่ 1: ป้องกันแอดมินกดเบิ้ล หรือกดปุ่มจากสลิปที่ตรวจไปแล้ว
             if txn.status in ["Receive", "Reject"]:
                 await query.answer(f"สลิปนี้ถูก {txn.status} ไปแล้วครับ!", show_alert=True)
-                # แอบลบปุ่มทิ้งให้ด้วย เพราะสลิปนี้จบงานไปแล้ว
                 await query.edit_message_reply_markup(reply_markup=None)
                 return
 
-            # เตรียมข้อความและสถานะชั่วคราว
             if action == "receive":
                 txn.status = "Receive"
                 action_text = "✅ อนุมัติรับยอด (Receive)"
@@ -189,18 +170,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 txn.status = "Reject"
                 action_text = "❌ ปฏิเสธ (Reject)"
                 
-            # 🚀 ลองส่งข้อมูลขึ้น Google Sheets ก่อน
-            # หมายเหตุ: ต้องมั่นใจว่าใน gsheets.py คืนค่าเป็น (True, "") หรือ (False, "error") ตามที่ทำไว้รอบก่อน
             sheet_success, sheet_error_msg = append_to_sheet(txn)
             
             if sheet_success:
-                # ✅ ถ้าลง Sheet ผ่าน ค่อย Save ข้อมูลลง Database จริงๆ
                 db.commit()
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
                 
-                # ตอบรับว่ากดปุ่มสำเร็จ (ไฟกะพริบที่ปุ่มดับลง)
                 await query.answer("บันทึกข้อมูลเรียบร้อย!") 
-                
                 await query.edit_message_text(
                     text=f"📌 **ดำเนินการเรียบร้อย!**\n"
                          f"แอดมินกดปุ่ม: {action_text}\n"
@@ -210,13 +186,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown"
                 )
             else:
-                # ❌ 🛡️ UX ที่ 2 & 3: Sheet พัง ต้อง Rollback และเด้ง Popup
-                db.rollback() # คืนสถานะใน DB กลับเป็น Pending
-                
-                # Telegram จำกัดข้อความ Popup ไม่เกิน 200 ตัวอักษร เราต้องหั่นข้อความป้องกันบอทแครช
+                db.rollback() 
                 short_err = str(sheet_error_msg)[:150]
-                
-                # เด้ง Popup แจ้งเตือนกลางจอ และไม่ลบปุ่ม เพื่อให้แอดมินกลับมากดใหม่ได้
                 await query.answer(
                     text=f"⚠️ บันทึกลง Sheet ไม่สำเร็จ!\n\n{short_err}\n\n👉 โปรดแก้ไฟล์แล้วกดใหม่อีกครั้ง",
                     show_alert=True
