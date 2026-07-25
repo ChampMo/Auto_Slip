@@ -34,8 +34,11 @@ services:
       PGADMIN_DEFAULT_PASSWORD: password1234    # ใช้รหัสผ่านนี้ล็อกอินเข้าเว็บ (เปลี่ยนได้)
     ports:
       - "5050:80"                               # เราจะเข้าเว็บผ่านพอร์ต 5050
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - db
 
 volumes:
   pgdata:
+  pgadmin_data: #หรือสร้างไฟล์ py อักอันที่เวลารันจะล้าง db แทนได้ไหม จะได้ง่ายๆ
