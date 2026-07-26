@@ -24,6 +24,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     qr_data_list = read_qr_code(temp_path)
     
+    # 👇 เพิ่มส่วนปริ้นท์ Payload ของ QR Code ลง Terminal ตรงนี้
+    if qr_data_list:
+        print(f"📸 [DEBUG] สแกนพบ QR Code จำนวน {len(qr_data_list)} ใบ:")
+        for idx, qr in enumerate(qr_data_list, 1):
+            print(f"   ใบที่ {idx} -> Payload: {qr}")
+    else:
+        print("📸 [DEBUG] ไม่พบ QR Code ในรูปภาพนี้")
+    # 👆 ----------------------------------------------------
+    
     if qr_data_list:
         with SessionLocal() as db:
             # โยน qr_data_list ทั้งก้อนให้ระบบประมวลผล
@@ -46,7 +55,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 all_senders = []
                 api_success = True
                 error_msg = ""
-                user_error_msg = "" # 👈 เพิ่มตัวแปรสำหรับรับข้อความภาษาไทย
+                user_error_msg = "" # 👈 ตัวแปรสำหรับรับข้อความภาษาไทย
                 
                 # 🔄 ยิง API ตรวจสอบทีละใบและบวกยอดรวมกัน
                 for qr in qr_data_list:
@@ -63,7 +72,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         api_success = False
                         error_msg = api_result.get("error", "UNKNOWN_ERROR")
-                        # 👇 ดึงข้อความแจ้งเตือนภาษาไทยที่ส่งมาจาก verify_slip
+                        # ดึงข้อความแจ้งเตือนภาษาไทยที่ส่งมาจาก verify_slip
                         user_error_msg = api_result.get("user_message", f"⚠️ ระบบตรวจสอบสลิปขัดข้อง ({error_msg})")
                         break # ถ้าพังใบเดียว ให้ถือว่าล่มทั้งก้อนเลย
                 
@@ -127,7 +136,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="Markdown"
                         )
                 else:
-                    # 👇 แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
+                    # แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
                     keyboard = get_approval_keyboard(txn.batch_id)
                     
                     alert_text = (
