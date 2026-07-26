@@ -73,60 +73,79 @@ class GoogleSheetsService:
             return 0.0
 
     def _apply_styles(self, worksheet: gspread.Worksheet):
-        """ใส่เส้นขอบตารางเฉพาะบริเวณที่มีข้อมูล"""
+        """จัดรูปแบบทั้งตาราง"""
+        
         try:
-            # 1. หาแถวล่าสุดที่มีข้อมูลจริง
-            last_row = len(worksheet.col_values(1))
-            if last_row < 1:
-                return
+            last_row = len(worksheet.col_values(19))  # S
 
-            # 2. รูปแบบเส้นขอบ
-            border_format = {
+            style = {
                 "borders": {
                     "top": {"style": "SOLID"},
                     "bottom": {"style": "SOLID"},
                     "left": {"style": "SOLID"},
                     "right": {"style": "SOLID"},
-                    "innerHorizontal": {"style": "SOLID"},
-                    "innerVertical": {"style": "SOLID"},
-                }
+                },
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
             }
 
-            # 3. ตีเส้นเฉพาะ A1 จนถึงคอลัมน์ H ในแถวล่าสุดที่มีข้อความ
-            worksheet.format(f"A1:H{last_row}", border_format)
-            
-            logger.info(f"📐 ใส่เส้นตารางเฉพาะแถวที่มีข้อมูล (A1:H{last_row}) สำเร็จ")
+            # จัดรูปแบบตาราง A:AJ ทั้งหมด
+            if last_row > 0:
+                worksheet.format(f"A1:AJ{last_row}", style)
+
+            # Header A:S สีเหลือง
+            worksheet.format(
+                "A1:S1",
+                {
+                    "backgroundColor": {
+                        "red": 1,
+                        "green": 1,
+                        "blue": 0.6
+                    },
+                    "textFormat": {
+                        "bold": True,
+                        "foregroundColor": {
+                            "red": 0,
+                            "green": 0,
+                            "blue": 0,
+                        },
+                    },
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                },
+            )
+
+            # Header T:AJ สีฟ้า
+            worksheet.format(
+                "T1:AJ1",
+                {
+                    "backgroundColor": {
+                        "red": 0.2,
+                        "green": 0.6,
+                        "blue": 1
+                    },
+                    "textFormat": {
+                        "bold": True,
+                        "foregroundColor": {
+                            "red": 1,
+                            "green": 1,
+                            "blue": 1,
+                        },
+                    },
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                },
+            )
+
+            worksheet.freeze(rows=1)
+
+            logger.info(f"จัดรูปแบบสำเร็จ (A1:AJ{last_row})")
 
         except Exception as e:
             logger.error(f"Formatting failed: {e}", exc_info=True)
 
-    def _format_header(self, worksheet: gspread.Worksheet):
-        """จัดรูปแบบ Header"""
-
-        worksheet.format(
-            "A1:H1",
-            {
-                "backgroundColor": {
-                    "red": 0.26,
-                    "green": 0.52,
-                    "blue": 0.96
-                },
-                "textFormat": {
-                    "bold": True,
-                    "foregroundColor": {
-                        "red": 1,
-                        "green": 1,
-                        "blue": 1
-                    }
-                },
-                "horizontalAlignment": "CENTER"
-            }
-        )
-
-        worksheet.freeze(rows=1)
-
     def update_daily_summary(self, worksheet: gspread.Worksheet):
-        """สร้าง/อัปเดต ตารางสรุปยอดประจำวัน ที่ Column L"""
+        
         records = worksheet.get_all_values()
         if len(records) <= 1:
             return
@@ -137,10 +156,13 @@ class GoogleSheetsService:
 
         # วนลูปอ่านข้อมูลข้าม Header (Row 1)
         for row in records[1:]:
-            col_user_id = row[0] if len(row) > 0 else ""
-            col_user_amt = row[1] if len(row) > 1 else ""
-            col_trans_id = row[4] if len(row) > 4 else ""
-            col_trans_amt = row[5] if len(row) > 5 else ""
+            # USER (L,M)
+            col_user_id = row[11] if len(row) > 11 else ""
+            col_user_amt = row[12] if len(row) > 12 else ""
+
+            # TRANS (P,Q)
+            col_trans_id = row[15] if len(row) > 15 else ""
+            col_trans_amt = row[16] if len(row) > 16 else ""
 
             # คำนวณฝั่ง USER
             if col_user_id:
@@ -160,6 +182,7 @@ class GoogleSheetsService:
                 customers[col_trans_id]["total"] += amt
 
         # จัดโครงสร้างตาราง Summary
+
         summary = [
             ["สรุปรายวัน"],
             ["วันที่", datetime.now().strftime("%d/%m/%Y")],
@@ -176,21 +199,26 @@ class GoogleSheetsService:
             ["ลูกค้า", "จำนวนครั้ง", "ยอดรวม"],
         ]
 
-        # เพิ่มข้อมูลลูกค้าประจำ (ใช้บริการ >= 3 ครั้ง)
+        
         for name, data in customers.items():
             if data["count"] >= 3:
                 summary.append([name, data["count"], data["total"]])
 
         # เขียนข้อมูลกลับไปยัง Column L1:N
+        summary = [row + [""] * (3 - len(row)) for row in summary]
         end_row = len(summary)
-        worksheet.update(f"L1:N{end_row}", summary)
+        worksheet.update(f"AK1:AM{end_row}", summary)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
         """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
+        if str(txn.status).strip().lower() == "reject":
+            logger.info("สถานะ Reject ข้ามการบันทึกลง Google Sheets")
+            return True, ""
+        
         try:
             spreadsheet = self._get_dynamic_spreadsheet()
             now = datetime.now()
-            sheet_name = now.strftime("%d")
+            sheet_name = now.strftime("%d-%m-%Y")
 
             # ดึง Worksheet ประจำวัน หรือสร้างใหม่ถ้ายังไม่มี
             try:
@@ -198,17 +226,39 @@ class GoogleSheetsService:
             except gspread.exceptions.WorksheetNotFound:
                 logger.info(f"📄 กำลังสร้างชีทสำหรับวันที่ {sheet_name}...")
                 worksheet = spreadsheet.add_worksheet(
-                    title=sheet_name, rows=1000, cols=20
+                    title=sheet_name,
+                    rows=1000,
+                    cols=40
                 )
 
                 # สร้าง Header ให้ชีทใหม่
                 headers = [
+                    "Trans ID", "WE88 ออก", "Agent", "Bank",
+                    "Trans ID", "12Play ออก", "Agent", "Bank",
+                    "Uwin ออก", "Agent", "Bank",
                     "Trans ID", "VIP WE รับ", "Time", "Agent",
-                    "Trans ID", "VIP 12 รับ P", "Time", "Agent"
-                ]
-                worksheet.update("A1:H1", [headers])
+                    "Trans ID", "VIP 12 รับ P", "Time", "Agent",
 
-                self._format_header(worksheet)
+                    "KB-CP",
+                    "KB-CPกระแส",
+                    "BAY-CKB",
+                    "KB-CKB",
+                    "KB-CKBกระแส",
+                    "KKP-Jak",
+                    "GSB-Jak",
+                    "BBL-Ploy",
+                    "GSB-Ativit",
+                    "KKP-LS",
+                    "SCB-CP",
+                    "GSB-Yo",
+                    "TTB-Yo",
+                    "SCB-Yo",
+                    "SCB-MT",
+                    "Cash ตา",
+                    "Cash Bas"
+                ]
+                worksheet.update("A1:AK1", [headers])
+
                 self._apply_styles(worksheet)
 
                 # ลบ Sheet1 ตั้งต้นออก (ถ้ามี)
@@ -249,12 +299,12 @@ class GoogleSheetsService:
                 txn.chat_bank or "-",
             ]
 
-            # หาแถวว่างถัดไปเฉพาะคอลัมน์ A
-            col_a_values = worksheet.col_values(1)
-            next_row = len(col_a_values) + 1
+            # หาแถวว่างถัดไปเฉพาะคอลัมน์ L
+            col_l_values = worksheet.col_values(12)
+            next_row = len(col_l_values) + 1
 
-            # เขียนข้อมูลเจาะจงเฉพาะช่วง A{next_row}:H{next_row}
-            worksheet.update(f"A{next_row}:H{next_row}", [row])
+            # เขียนข้อมูลเจาะจงเฉพาะช่วง L{next_row}:S{next_row}
+            worksheet.update(f"L{next_row}:S{next_row}", [row])
 
             # 1. อัปเดต Summary รายวัน
             self.update_daily_summary(worksheet)
