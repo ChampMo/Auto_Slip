@@ -105,7 +105,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"ยอดในแชท: `{chat_amount}`\n\n"
                                 f"👉 *โปรดตรวจสอบและกดปุ่ม ✅ Receive*", 
                             reply_markup=keyboard,
-                            parse_mode="Markdown"
+                            # parse_mode="MarkdownV2"
                         )
                     else:
                         txn.status = "Reject"
@@ -124,7 +124,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=f"❌ **Auto-Rejected: ข้อมูลไม่ตรงกัน!**\n"
                                 f"{reject_reason}\n"
                                 f"*(ระบบปฏิเสธสลิปชุดนี้อัตโนมัติ)*",
-                            parse_mode="Markdown"
+                            # parse_mode="MarkdownV2"
                         )
                 else:
                     # 👇 แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
@@ -140,7 +140,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_to_message_id=target_msg_id,
                         text=alert_text, 
                         reply_markup=keyboard,
-                        parse_mode="Markdown"
+                        # parse_mode="MarkdownV2"
                     )
                     
     if os.path.exists(temp_path):
@@ -179,11 +179,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("บันทึกข้อมูลเรียบร้อย!") 
                 await query.edit_message_text(
                     text=f"📌 **ดำเนินการเรียบร้อย!**\n"
-                         f"แอดมินกดปุ่ม: {action_text}\n"
-                         f"Ref Group: `{txn.batch_id[:15]}...`\n"
-                         f"*(สถานะอัปเดตเป็น {txn.status})*\n"
-                         f"📊 บันทึกลง Sheet สำเร็จ", 
-                    parse_mode="Markdown"
+                        f"แอดมินกดปุ่ม: {action_text}\n"
+                        f"Ref Group: `{txn.batch_id[:15]}...`\n"
+                        f"*(สถานะอัปเดตเป็น {txn.status})*\n"
+                        f"📊 บันทึกลง Sheet สำเร็จ", 
+                    # parse_mode="MarkdownV2"
                 )
             else:
                 db.rollback() 
@@ -194,4 +194,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
         else:
             await query.answer("ไม่พบข้อมูลในระบบ", show_alert=True)
-            await query.edit_message_text(text="⚠️ **เกิดข้อผิดพลาด:** ไม่พบข้อมูลนี้ในระบบ", parse_mode="Markdown")
+            await query.edit_message_text(text="⚠️ **เกิดข้อผิดพลาด:** ไม่พบข้อมูลนี้ในระบบ",
+                                        # parse_mode="Markdown"
+                                        )

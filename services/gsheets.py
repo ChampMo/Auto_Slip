@@ -183,20 +183,111 @@ class GoogleSheetsService:
 
         # จัดโครงสร้างตาราง Summary
 
+# =========================
+# Withdraw Account
+# =========================
+
         summary = [
-            ["สรุปรายวัน"],
-            ["วันที่", datetime.now().strftime("%d/%m/%Y")],
-            [],
-            ["USER"],
-            ["จำนวนรายการ", user_count],
-            ["ยอดเงินรวม", user_total],
-            [],
-            ["TRANS"],
-            ["จำนวนรายการ", trans_count],
-            ["ยอดเงินรวม", trans_total],
-            [],
-            ["ลูกค้าประจำ"],
-            ["ลูกค้า", "จำนวนครั้ง", "ยอดรวม"],
+            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
+            ["บัญชี", "We88", "12T", "Uwin THB", "Total"],
+
+            ["P", "=MOCK_P_WE88", "=MOCK_P_12T", "=MOCK_P_UWIN", "=SUM(AL3:AN3)"],
+            ["G", "=MOCK_G_WE88", "=MOCK_G_12T", "=MOCK_G_UWIN", "=SUM(AL4:AN4)"],
+            ["B", "=MOCK_B_WE88", "=MOCK_B_12T", "=MOCK_B_UWIN", "=SUM(AL5:AN5)"],
+            ["T", "=MOCK_T_WE88", "=MOCK_T_12T", "=MOCK_T_UWIN", "=SUM(AL6:AN6)"],
+            ["N", "=MOCK_N_WE88", "=MOCK_N_12T", "=MOCK_N_UWIN", "=SUM(AL7:AN7)"],
+            ["Y", "=MOCK_Y_WE88", "=MOCK_Y_12T", "=MOCK_Y_UWIN", "=SUM(AL8:AN8)"],
+
+            [
+                "ยอดที่ไม่เข้า",
+                "=SUM(AL3:AL8)",
+                "=SUM(AM3:AM8)",
+                "=SUM(AN3:AN8)",
+                "=SUM(AO3:AO8)"
+            ],
+
+            [
+                "ถอนเงินออกทั้งหมด",
+                "=AL9",
+                "=AM9",
+                "=AN9",
+                "=SUM(AL10:AN10)"
+            ],
+        ]
+
+
+        # =========================
+        # Bank Table
+        # =========================
+
+        bank_table = [
+            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
+            ["Bank", "We88", "12T", "Uwin THB", "Total"],
+
+            ["SCB-CP", "=M1", "=M2", "=M3", "=SUM(AQ3:AS3)"],
+            ["KB-CP", "=M1", "=M2", "=M3", "=SUM(AQ4:AS4)"],
+            ["BAY-CKB", "=M1", "=M2", "=M3", "=SUM(AQ5:AS5)"],
+            ["KB-CKB", "=M1", "=M2", "=M3", "=SUM(AQ6:AS6)"],
+            ["KKP-Jak", "=M1", "=M2", "=M3", "=SUM(AQ7:AS7)"],
+            ["GSB-Jak", "=M1", "=M2", "=M3", "=SUM(AQ8:AS8)"],
+            ["BBL-Ploy", "=M1", "=M2", "=M3", "=SUM(AQ9:AS9)"],
+            ["GSB-Ativit", "=M1", "=M2", "=M3", "=SUM(AQ10:AS10)"],
+            ["KKP-Yo", "=M1", "=M2", "=M3", "=SUM(AQ11:AS11)"],
+            ["TTB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ12:AS12)"],
+            ["SCB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ13:AS13)"],
+            ["GSB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ14:AS14)"],
+            ["KB-CKทรรศนะ", "=M1", "=M2", "=M3", "=SUM(AQ15:AS15)"],
+            ["KB-CPทรรศนะ", "=M1", "=M2", "=M3", "=SUM(AQ16:AS16)"],
+            ["KKP-LS", "=M1", "=M2", "=M3", "=SUM(AQ17:AS17)"],
+
+            [
+                "",
+                "=SUM(AQ3:AQ17)",
+                "=SUM(AR3:AR17)",
+                "=SUM(AS3:AS17)",
+                "=SUM(AT3:AT17)"
+            ],
+
+            [
+                "ถอนเงินออกทั้งหมด",
+                "=AQ18",
+                "=AR18",
+                "=AS18",
+                "=SUM(AQ19:AS19)"
+            ],
+        ]
+
+
+        # =========================
+        # Deposit Table
+        # =========================
+
+        deposit_table = [
+            ["สรุปยอดเงินโอนเข้าทั้งหมด / แยกบัญชี (Deposit)", "", "", "", "", "", "", "", ""],
+
+            ["บัญชี", "We88", "12T", "", "Total",
+            "We88", "12T", "", "Total"],
+
+            ["SCB-CP", "=M1", "=M2", "", "=SUM(AV3:AW3)", 0, 0, "", "=SUM(AZ3:BA3)"],
+            ["SCB-MT", "=M1", "=M2", "", "=SUM(AV4:AW4)", 0, 0, "", "=SUM(AZ4:BA4)"],
+            ["GSB-Yo", "=M1", "=M2", "", "=SUM(AV5:AW5)", 0, 0, "", "=SUM(AZ5:BA5)"],
+            ["TTB-Yo", "=M1", "=M2", "", "=SUM(AV6:AW6)", 0, 0, "", "=SUM(AZ6:BA6)"],
+            ["SCB-Yo", "=M1", "=M2", "", "=SUM(AV7:AW7)", 0, 0, "", "=SUM(AZ7:BA7)"],
+
+            ["",0,0,"",0,0,0,"",0],
+            ["",0,0,"",0,0,0,"",0],
+
+            [
+                "ยอดเงินเข้าทั้งหมด",
+                "=SUM(AV3:AV9)",
+                "=SUM(AW3:AW9)",
+                "",
+                "=SUM(AX3:AX9)",
+                "=SUM(AY3:AY9)",
+                "=SUM(AZ3:AZ9)",
+                "",
+                "=SUM(BC3:BC9)"
+            ],
         ]
 
         
@@ -207,7 +298,37 @@ class GoogleSheetsService:
         # เขียนข้อมูลกลับไปยัง Column L1:N
         summary = [row + [""] * (3 - len(row)) for row in summary]
         end_row = len(summary)
-        worksheet.update(f"AK1:AM{end_row}", summary)
+        max_rows = max(
+            len(summary),
+            len(bank_table),
+            len(deposit_table)
+        )
+
+        while len(summary) < max_rows:
+            summary.append([""] * 5)
+
+        while len(bank_table) < max_rows:
+            bank_table.append([""] * 5)
+
+        while len(deposit_table) < max_rows:
+            deposit_table.append([""] * 9)
+
+
+        merged = []
+
+        for i in range(max_rows):
+            merged.append(
+                summary[i]
+                + bank_table[i]
+                + deposit_table[i]
+            )
+
+
+        worksheet.update(
+            f"AK1:BC{len(merged)}",
+            merged,
+            value_input_option="USER_ENTERED"
+        )
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
         """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
