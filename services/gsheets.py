@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from typing import Tuple, Any, Dict
+from wsgiref import headers
 
 from core.config import config
 from google.oauth2.service_account import Credentials
@@ -72,13 +73,13 @@ class GoogleSheetsService:
         except (ValueError, TypeError):
             return 0.0
 
-    def _apply_styles(self, worksheet: gspread.Worksheet):
-        """จัดรูปแบบทั้งตาราง"""
-        
+    def _apply_main_table_style(self, worksheet: gspread.Worksheet):
+        """จัดรูปแบบตารางหลัก A:AJ"""
+
         try:
             last_row = len(worksheet.col_values(19))  # S
 
-            style = {
+            base_style = {
                 "borders": {
                     "top": {"style": "SOLID"},
                     "bottom": {"style": "SOLID"},
@@ -89,18 +90,18 @@ class GoogleSheetsService:
                 "verticalAlignment": "MIDDLE",
             }
 
-            # จัดรูปแบบตาราง A:AJ ทั้งหมด
             if last_row > 0:
-                worksheet.format(f"A1:AJ{last_row}", style)
+                worksheet.format(f"A1:AJ{last_row}", base_style)
 
-            # Header A:S สีเหลือง
+            # Header A:S
             worksheet.format(
                 "A1:S1",
                 {
+                    **base_style,
                     "backgroundColor": {
                         "red": 1,
                         "green": 1,
-                        "blue": 0.6
+                        "blue": 0.6,
                     },
                     "textFormat": {
                         "bold": True,
@@ -110,19 +111,18 @@ class GoogleSheetsService:
                             "blue": 0,
                         },
                     },
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
                 },
             )
 
-            # Header T:AJ สีฟ้า
+            # Header T:AJ
             worksheet.format(
                 "T1:AJ1",
                 {
+                    **base_style,
                     "backgroundColor": {
                         "red": 0.2,
                         "green": 0.6,
-                        "blue": 1
+                        "blue": 1,
                     },
                     "textFormat": {
                         "bold": True,
@@ -132,17 +132,161 @@ class GoogleSheetsService:
                             "blue": 1,
                         },
                     },
-                    "horizontalAlignment": "CENTER",
-                    "verticalAlignment": "MIDDLE",
                 },
             )
 
             worksheet.freeze(rows=1)
 
-            logger.info(f"จัดรูปแบบสำเร็จ (A1:AJ{last_row})")
+        except Exception as e:
+            logger.error(f"Main table style failed: {e}", exc_info=True)
+
+    def _apply_summary_style(self, worksheet: gspread.Worksheet):
+        """จัดรูปแบบ Summary Table AK:BC"""
+
+        try:
+            border = {
+                "top": {"style": "SOLID"},
+                "bottom": {"style": "SOLID"},
+                "left": {"style": "SOLID"},
+                "right": {"style": "SOLID"},
+            }
+
+            base = {
+                "borders": border,
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
+            }
+
+            # =========================
+            # ตาราง 1 (AK:AO)
+            # =========================
+            worksheet.format("AK1:AO10", base)
+
+            # Header หลัก
+            worksheet.format(
+                "AK1:AO1",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # Header รอง
+            worksheet.format(
+                "AK2:AO2",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # Total
+            worksheet.format(
+                "AK10:AO10",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # =========================
+            # ตาราง 2 (AP:AT)
+            # =========================
+            worksheet.format("AP1:AT19", base)
+
+            worksheet.format(
+                "AP1:AT1",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            worksheet.format(
+                "AP2:AT2",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            worksheet.format(
+                "AP19:AT19",
+                {
+                    **base,
+                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # =========================
+            # ตาราง 3 (AU:BC)
+            # =========================
+            worksheet.format("AU1:BC10", base)
+
+            # Header หลัก
+            worksheet.format(
+                "AU1:BC1",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 0.00,
+                        "green": 0.90,
+                        "blue": 0.90,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # Deposit
+            worksheet.format(
+                "AU2:AY2",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 1.00,
+                        "green": 0.82,
+                        "blue": 0.50,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # จำนวนครั้ง
+            worksheet.format(
+                "AZ2:BC2",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 0.00,
+                        "green": 0.90,
+                        "blue": 0.90,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # Total
+            worksheet.format(
+                "AU10:BC10",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 0.00,
+                        "green": 0.90,
+                        "blue": 0.90,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Formatting failed: {e}", exc_info=True)
+            logger.error(f"Summary style failed: {e}", exc_info=True)
 
     def update_daily_summary(self, worksheet: gspread.Worksheet):
         
@@ -191,27 +335,27 @@ class GoogleSheetsService:
             ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
             ["บัญชี", "We88", "12T", "Uwin THB", "Total"],
 
-            ["P", "=MOCK_P_WE88", "=MOCK_P_12T", "=MOCK_P_UWIN", "=SUM(AL3:AN3)"],
-            ["G", "=MOCK_G_WE88", "=MOCK_G_12T", "=MOCK_G_UWIN", "=SUM(AL4:AN4)"],
-            ["B", "=MOCK_B_WE88", "=MOCK_B_12T", "=MOCK_B_UWIN", "=SUM(AL5:AN5)"],
-            ["T", "=MOCK_T_WE88", "=MOCK_T_12T", "=MOCK_T_UWIN", "=SUM(AL6:AN6)"],
-            ["N", "=MOCK_N_WE88", "=MOCK_N_12T", "=MOCK_N_UWIN", "=SUM(AL7:AN7)"],
-            ["Y", "=MOCK_Y_WE88", "=MOCK_Y_12T", "=MOCK_Y_UWIN", "=SUM(AL8:AN8)"],
+            ["P", "=SUMIF(C:C,AK3,B:B)", "=SUMIF(G:G,AK3,F:F)", "=SUMIF(J:J,AK3,I:I)", "=SUM(AL3:AN3)"],
+            ["G", "=SUMIF(C:C,AK4,B:B)", "=SUMIF(G:G,AK4,F:F)", "=SUMIF(J:J,AK4,I:I)", "=SUM(AL4:AN4)"],
+            ["B", "=SUMIF(C:C,AK5,B:B)", "=SUMIF(G:G,AK5,F:F)", "=SUMIF(J:J,AK5,I:I)", "=SUM(AL5:AN5)"],
+            ["T", "=SUMIF(C:C,AK6,B:B)", "=SUMIF(G:G,AK6,F:F)", "=SUMIF(J:J,AK6,I:I)", "=SUM(AL6:AN6)"],
+            ["N", "=SUMIF(C:C,AK7,B:B)", "=SUMIF(G:G,AK7,F:F)", "=SUMIF(J:J,AK7,I:I)", "=SUM(AL7:AN7)"],
+            ["Y", "=SUMIF(C:C,AK8,B:B)", "=SUMIF(G:G,AK8,F:F)", "=SUMIF(J:J,AK8,I:I)", "=SUM(AL8:AN8)"],
 
             [
-                "ยอดที่ไม่เข้า",
-                "=SUM(AL3:AL8)",
-                "=SUM(AM3:AM8)",
-                "=SUM(AN3:AN8)",
-                "=SUM(AO3:AO8)"
+                "ยอดที่ไม่มีชื่อ",
+                "=B303-SUM(AL3:AL8)",
+                "=F303-SUM(AM3:AM8)",
+                "=I303-SUM(AN3:AN8)",
+                "=SUM(AL9:AN9)"
             ],
 
             [
-                "ถอนเงินออกทั้งหมด",
-                "=AL9",
-                "=AM9",
-                "=AN9",
-                "=SUM(AL10:AN10)"
+                "ยอดเงินออกทั้งหมด",
+                "=SUM(AL3:AL9)",
+                "=SUM(AM3:AM9)",
+                "=SUM(AN3:AN9)",
+                "=SUM(AO3:AO9)"
             ],
         ]
 
@@ -224,37 +368,38 @@ class GoogleSheetsService:
             ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
             ["Bank", "We88", "12T", "Uwin THB", "Total"],
 
-            ["SCB-CP", "=M1", "=M2", "=M3", "=SUM(AQ3:AS3)"],
-            ["KB-CP", "=M1", "=M2", "=M3", "=SUM(AQ4:AS4)"],
-            ["BAY-CKB", "=M1", "=M2", "=M3", "=SUM(AQ5:AS5)"],
-            ["KB-CKB", "=M1", "=M2", "=M3", "=SUM(AQ6:AS6)"],
-            ["KKP-Jak", "=M1", "=M2", "=M3", "=SUM(AQ7:AS7)"],
-            ["GSB-Jak", "=M1", "=M2", "=M3", "=SUM(AQ8:AS8)"],
-            ["BBL-Ploy", "=M1", "=M2", "=M3", "=SUM(AQ9:AS9)"],
-            ["GSB-Ativit", "=M1", "=M2", "=M3", "=SUM(AQ10:AS10)"],
-            ["KKP-Yo", "=M1", "=M2", "=M3", "=SUM(AQ11:AS11)"],
-            ["TTB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ12:AS12)"],
-            ["SCB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ13:AS13)"],
-            ["GSB-Yo", "=M1", "=M2", "=M3", "=SUM(AQ14:AS14)"],
-            ["KB-CKทรรศนะ", "=M1", "=M2", "=M3", "=SUM(AQ15:AS15)"],
-            ["KB-CPทรรศนะ", "=M1", "=M2", "=M3", "=SUM(AQ16:AS16)"],
-            ["KKP-LS", "=M1", "=M2", "=M3", "=SUM(AQ17:AS17)"],
+            ["SCB-CP", "=SUMIF(D:D,AP3,B:B)", "=SUMIF(H:H,AP3,F:F)", "=SUMIF(K:K,AP3,I:I)", "=SUM(AQ3:AS3)"],
+            ["KB-CP", "=SUMIF(D:D,AP4,B:B)", "=SUMIF(H:H,AP4,F:F)", "=SUMIF(K:K,AP4,I:I)", "=SUM(AQ4:AS4)"],
+            ["BAY-CKB", "=SUMIF(D:D,AP5,B:B)", "=SUMIF(H:H,AP5,F:F)", "=SUMIF(K:K,AP5,I:I)", "=SUM(AQ5:AS5)"],
+            ["KB-CKB", "=SUMIF(D:D,AP6,B:B)", "=SUMIF(H:H,AP6,F:F)", "=SUMIF(K:K,AP6,I:I)", "=SUM(AQ6:AS6)"],
+            ["KKP-Jak", "=SUMIF(D:D,AP7,B:B)", "=SUMIF(H:H,AP7,F:F)", "=SUMIF(K:K,AP7,I:I)", "=SUM(AQ7:AS7)"],
+            ["GSB-Jak", "=SUMIF(D:D,AP8,B:B)", "=SUMIF(H:H,AP8,F:F)", "=SUMIF(K:K,AP8,I:I)", "=SUM(AQ8:AS8)"],
+            ["BBL-Ploy", "=SUMIF(D:D,AP9,B:B)", "=SUMIF(H:H,AP9,F:F)", "=SUMIF(K:K,AP9,I:I)", "=SUM(AQ9:AS9)"],
+            ["GSB-Ativit", "=SUMIF(D:D,AP10,B:B)", "=SUMIF(H:H,AP10,F:F)", "=SUMIF(K:K,AP10,I:I)", "= SUM(AQ10:AS10)"],
+            ["KKP-Yo", "= SUMIF(D:D,AP11,B:B)", "= SUMIF(H:H,AP11,F:F)", "= SUMIF(K:K,AP11,I:I)", "= SUM(AQ11:AS11)"],
+            ["TTB-Yo", "= SUMIF(D:D,AP12,B:B)", "= SUMIF(H:H,AP12,F:F)", "= SUMIF(K:K,AP12,I:I)", "= SUM(AQ12:AS12)"],
+            ["SCB-Yo", "= SUMIF(D:D,AP13,B:B)", "= SUMIF(H:H,AP13,F:F)", "= SUMIF(K:K,AP13,I:I)","= SUM(AQ13:AS13)"],
+            ["GSB-Yo", "=SUMIF(D:D,AP14,B:B)", "=SUMIF(H:H,AP14,F:F)", "=SUMIF(K:K,AP14,I:I)", "=SUM(AQ14:AS14)"],
+            ["KB-CKทรรศนะ", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
+            ["KB-CPทรรศนะ", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
+            ["KKP-LS", "=SUMIF(D:D,AP17,B:B)", "=SUMIF(H:H,AP17,F:F)", "=SUMIF(K:K,AP17,I:I)", "=SUM(AQ17:AS17)"],
 
             [
                 "",
-                "=SUM(AQ3:AQ17)",
-                "=SUM(AR3:AR17)",
-                "=SUM(AS3:AS17)",
-                "=SUM(AT3:AT17)"
+                "=SUMIF(D:D,AP18,B:B)",
+                "=SUMIF(H:H,AP18,F:F)",
+                "=SUMIF(K:K,AP18,I:I)",
+                "=SUM(AQ18:AS18)"
             ],
 
             [
                 "ถอนเงินออกทั้งหมด",
-                "=AQ18",
-                "=AR18",
-                "=AS18",
-                "=SUM(AQ19:AS19)"
+                "=SUM(AQ3:AQ18)",
+                "=SUM(AR3:AR18)",
+                "=SUM(AS3:AS18)",
+                "=SUM(AT3:AT18)"
             ],
+            
         ]
 
 
@@ -268,11 +413,11 @@ class GoogleSheetsService:
             ["บัญชี", "We88", "12T", "", "Total",
             "We88", "12T", "", "Total"],
 
-            ["SCB-CP", "=M1", "=M2", "", "=SUM(AV3:AW3)", 0, 0, "", "=SUM(AZ3:BA3)"],
-            ["SCB-MT", "=M1", "=M2", "", "=SUM(AV4:AW4)", 0, 0, "", "=SUM(AZ4:BA4)"],
-            ["GSB-Yo", "=M1", "=M2", "", "=SUM(AV5:AW5)", 0, 0, "", "=SUM(AZ5:BA5)"],
-            ["TTB-Yo", "=M1", "=M2", "", "=SUM(AV6:AW6)", 0, 0, "", "=SUM(AZ6:BA6)"],
-            ["SCB-Yo", "=M1", "=M2", "", "=SUM(AV7:AW7)", 0, 0, "", "=SUM(AZ7:BA7)"],
+            ["SCB-CP", "=SUMIF(O:O,AU3,M:M)", "=SUMIF(S:S,AU3,Q:Q)", "", "=SUM(AV3:AW3)", "=COUNTIF(O:O,AU3)", "=COUNTIF(S:S,AU3)", "", "=SUM(AZ3:BA3)"],
+            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AV4:AW4)"],
+            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AV5:AW5)"],
+            ["TTB-Yo", "=SUMIF(O:O,AU6,M:M)", "=SUMIF(S:S,AU6,Q:Q)", "", "=SUM(AV6:AW6)", "=COUNTIF(O:O,AU6)", "=COUNTIF(S:S,AU6)", "", "=SUM(AZ6:BA6)"],
+            ["SCB-Yo", "=SUMIF(O:O,AU7,M:M)", "=SUMIF(S:S,AU7,Q:Q)", "", "=SUM(AV7:AW7)", "=COUNTIF(O:O,AU7)", "=COUNTIF(S:S,AU7)", "", "=SUM(AZ7:BA7)"],
 
             ["",0,0,"",0,0,0,"",0],
             ["",0,0,"",0,0,0,"",0],
@@ -282,11 +427,11 @@ class GoogleSheetsService:
                 "=SUM(AV3:AV9)",
                 "=SUM(AW3:AW9)",
                 "",
-                "=SUM(AX3:AX9)",
                 "=SUM(AY3:AY9)",
                 "=SUM(AZ3:AZ9)",
+                "=SUM(BA3:BA7)",
                 "",
-                "=SUM(BC3:BC9)"
+                "=SUM(BC3:BC7)"
             ],
         ]
 
@@ -349,7 +494,7 @@ class GoogleSheetsService:
                 worksheet = spreadsheet.add_worksheet(
                     title=sheet_name,
                     rows=1000,
-                    cols=40
+                    cols=55
                 )
 
                 # สร้าง Header ให้ชีทใหม่
@@ -378,9 +523,14 @@ class GoogleSheetsService:
                     "Cash ตา",
                     "Cash Bas"
                 ]
-                worksheet.update("A1:AK1", [headers])
 
-                self._apply_styles(worksheet)
+                while len(headers) < 55:
+                    headers.append("")
+                worksheet.update("A1:BC1", [headers])
+
+                self._apply_main_table_style(worksheet)
+                self._apply_summary_style(worksheet)
+
 
                 # ลบ Sheet1 ตั้งต้นออก (ถ้ามี)
                 try:
@@ -430,8 +580,8 @@ class GoogleSheetsService:
             # 1. อัปเดต Summary รายวัน
             self.update_daily_summary(worksheet)
 
-            # 2. จัดสไตล์สี / เส้นขอบตาราง
-            self._apply_styles(worksheet)
+            self._apply_main_table_style(worksheet)
+            self._apply_summary_style(worksheet)
 
             logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (Row {next_row})")
             return True, ""
