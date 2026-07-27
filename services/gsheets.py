@@ -73,6 +73,44 @@ class GoogleSheetsService:
         except (ValueError, TypeError):
             return 0.0
 
+    AGENT_ACCOUNT_DROPDOWN_VALUES = [
+        "SCB-CP",
+        "KB-CP",
+        "BAY-CKB",
+        "KB-CKB",
+        "KKP-Jak",
+        "GSB-Jak",
+        "BBL-Ploy",
+        "GSB-Ativit",
+        "KKP-Yo",
+        "TTB-Yo",
+        "SCB-Yo",
+        "GSB-Yo",
+        "SCB-MT",
+        "KKP-LS",
+        "KB-CPทรรศนะ",
+        "KB-CKทรรศนะ",
+    ]
+
+    SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
+    SUMMARY_BANK_DROPDOWN_VALUES = [
+        "SCB-CP",
+        "KB-CP",
+        "BAY-CKB",
+        "KB-CKB",
+        "KKP-Jak",
+        "GSB-Jak",
+        "BBL-Ploy",
+        "GSB-Ativit",
+        "KKP-Yo",
+        "TTB-Yo",
+        "SCB-Yo",
+        "GSB-Yo",
+        "KB-CKทรรศนะ",
+        "KB-CPทรรศนะ",
+        "KKP-LS",
+    ]
+
     def _apply_main_table_style(self, worksheet: gspread.Worksheet):
         """จัดรูปแบบตารางหลัก A:AJ"""
 
@@ -140,6 +178,112 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Main table style failed: {e}", exc_info=True)
 
+    def _apply_agent_dropdowns_to_row(self, worksheet: gspread.Worksheet, row_number: int):
+        """Set dropdown validation for Agent columns on a newly created row."""
+        try:
+            sheet_id = getattr(worksheet, "id", None) or worksheet._properties.get("sheetId")
+            accounts = [
+                {"userEnteredValue": account}
+                for account in self.AGENT_ACCOUNT_DROPDOWN_VALUES
+            ]
+
+            rule = {
+                "condition": {
+                    "type": "ONE_OF_LIST",
+                    "values": accounts,
+                },
+                "strict": True,
+                "showCustomUi": True,
+            }
+
+            # Agent columns for inserted data rows: N and R (0-based idx 13 and 17)
+            dropdown_ranges = [
+                {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": 14,
+                    "endColumnIndex": 15,
+                },
+                {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": 18,
+                    "endColumnIndex": 19,
+                },
+            ]
+
+            requests = [
+                {"setDataValidation": {"range": r, "rule": rule}}
+                for r in dropdown_ranges
+            ]
+
+            worksheet.spreadsheet.batch_update({"requests": requests})
+        except Exception as e:
+            logger.error(f"Agent dropdown setup failed: {e}", exc_info=True)
+
+    def _apply_summary_dropdowns(self, worksheet: gspread.Worksheet):
+        """Apply dropdown lists to the summary tables for AK, AP, and AU."""
+        try:
+            sheet_id = getattr(worksheet, "id", None) or worksheet._properties.get("sheetId")
+            account_values = [{"userEnteredValue": value} for value in self.SUMMARY_ACCOUNT_DROPDOWN_VALUES]
+            bank_values = [{"userEnteredValue": value} for value in self.SUMMARY_BANK_DROPDOWN_VALUES]
+
+            account_rule = {
+                "condition": {"type": "ONE_OF_LIST", "values": account_values},
+                "strict": True,
+                "showCustomUi": True,
+            }
+            bank_rule = {
+                "condition": {"type": "ONE_OF_LIST", "values": bank_values},
+                "strict": True,
+                "showCustomUi": True,
+            }
+
+            requests = [
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 2,
+                            "endRowIndex": 8,
+                            "startColumnIndex": 36,
+                            "endColumnIndex": 37,
+                        },
+                        "rule": account_rule,
+                    }
+                },
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 2,
+                            "endRowIndex": 17,
+                            "startColumnIndex": 41,
+                            "endColumnIndex": 42,
+                        },
+                        "rule": bank_rule,
+                    }
+                },
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 2,
+                            "endRowIndex": 7,
+                            "startColumnIndex": 46,
+                            "endColumnIndex": 47,
+                        },
+                        "rule": bank_rule,
+                    }
+                },
+            ]
+
+            worksheet.spreadsheet.batch_update({"requests": requests})
+        except Exception as e:
+            logger.error(f"Summary dropdown setup failed: {e}", exc_info=True)
+
     def _apply_summary_style(self, worksheet: gspread.Worksheet):
         """จัดรูปแบบ Summary Table AK:BC"""
 
@@ -162,12 +306,12 @@ class GoogleSheetsService:
             # =========================
             worksheet.format("AK1:AO10", base)
 
-            # Header หลัก
+            # Header หลัก: AK-AO สีเขียวอ่อน
             worksheet.format(
                 "AK1:AO1",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "backgroundColor": {"red": 0.85, "green": 0.95, "blue": 0.85},
                     "textFormat": {"bold": True},
                 },
             )
@@ -177,7 +321,7 @@ class GoogleSheetsService:
                 "AK2:AO2",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+                    "backgroundColor": {"red": 0.90, "green": 0.97, "blue": 0.90},
                     "textFormat": {"bold": True},
                 },
             )
@@ -187,7 +331,7 @@ class GoogleSheetsService:
                 "AK10:AO10",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "backgroundColor": {"red": 0.85, "green": 0.95, "blue": 0.85},
                     "textFormat": {"bold": True},
                 },
             )
@@ -201,7 +345,7 @@ class GoogleSheetsService:
                 "AP1:AT1",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "backgroundColor": {"red": 0.90, "green": 0.90, "blue": 0.90},
                     "textFormat": {"bold": True},
                 },
             )
@@ -210,7 +354,7 @@ class GoogleSheetsService:
                 "AP2:AT2",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+                    "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
                     "textFormat": {"bold": True},
                 },
             )
@@ -219,7 +363,7 @@ class GoogleSheetsService:
                 "AP19:AT19",
                 {
                     **base,
-                    "backgroundColor": {"red": 0.82, "green": 0.82, "blue": 0.82},
+                    "backgroundColor": {"red": 0.90, "green": 0.90, "blue": 0.90},
                     "textFormat": {"bold": True},
                 },
             )
@@ -229,61 +373,137 @@ class GoogleSheetsService:
             # =========================
             worksheet.format("AU1:BC10", base)
 
-            # Header หลัก
+            # Header หลัก: AU-AY เป็นสีส้มอ่อน, AZ-BC เป็นสีฟ้า
             worksheet.format(
-                "AU1:BC1",
+                "AU1:AY1",
                 {
                     **base,
                     "backgroundColor": {
-                        "red": 0.00,
-                        "green": 0.90,
-                        "blue": 0.90,
+                        "red": 1.00,
+                        "green": 0.92,
+                        "blue": 0.78,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
+            worksheet.format(
+                "AZ1:BC1",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 0.80,
+                        "green": 0.94,
+                        "blue": 0.97,
                     },
                     "textFormat": {"bold": True},
                 },
             )
 
-            # Deposit
+            # Deposit subheader: AU-AY ส้มอ่อน, AZ-BC ฟ้า
             worksheet.format(
                 "AU2:AY2",
                 {
                     **base,
                     "backgroundColor": {
                         "red": 1.00,
-                        "green": 0.82,
-                        "blue": 0.50,
+                        "green": 0.96,
+                        "blue": 0.88,
                     },
                     "textFormat": {"bold": True},
                 },
             )
-
-            # จำนวนครั้ง
             worksheet.format(
                 "AZ2:BC2",
                 {
                     **base,
                     "backgroundColor": {
-                        "red": 0.00,
-                        "green": 0.90,
-                        "blue": 0.90,
+                        "red": 0.80,
+                        "green": 0.94,
+                        "blue": 0.97,
                     },
                     "textFormat": {"bold": True},
                 },
             )
 
-            # Total
+            # Total row: แยกสีตามตาราง
             worksheet.format(
-                "AU10:BC10",
+                "AU10:AY10",
                 {
                     **base,
                     "backgroundColor": {
-                        "red": 0.00,
-                        "green": 0.90,
-                        "blue": 0.90,
+                        "red": 1.00,
+                        "green": 0.92,
+                        "blue": 0.78,
                     },
                     "textFormat": {"bold": True},
                 },
             )
+            worksheet.format(
+                "AZ10:BC10",
+                {
+                    **base,
+                    "backgroundColor": {
+                        "red": 0.80,
+                        "green": 0.94,
+                        "blue": 0.97,
+                    },
+                    "textFormat": {"bold": True},
+                },
+            )
+
+            # Merge table headers so title text centers across each summary block
+            worksheet.spreadsheet.batch_update({
+                "requests": [
+                    {
+                        "mergeCells": {
+                            "range": {
+                                "sheetId": getattr(worksheet, "id", None) or worksheet._properties.get("sheetId"),
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 36,
+                                "endColumnIndex": 41,
+                            },
+                            "mergeType": "MERGE_ALL",
+                        }
+                    },
+                    {
+                        "mergeCells": {
+                            "range": {
+                                "sheetId": getattr(worksheet, "id", None) or worksheet._properties.get("sheetId"),
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 41,
+                                "endColumnIndex": 46,
+                            },
+                            "mergeType": "MERGE_ALL",
+                        }
+                    },
+                    {
+                        "mergeCells": {
+                            "range": {
+                                "sheetId": getattr(worksheet, "id", None) or worksheet._properties.get("sheetId"),
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 46,
+                                "endColumnIndex": 51,
+                            },
+                            "mergeType": "MERGE_ALL",
+                        }
+                    },
+                    {
+                        "mergeCells": {
+                            "range": {
+                                "sheetId": getattr(worksheet, "id", None) or worksheet._properties.get("sheetId"),
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 51,
+                                "endColumnIndex": 55,
+                            },
+                            "mergeType": "MERGE_ALL",
+                        }
+                    },
+                ]
+            })
 
         except Exception as e:
             logger.error(f"Summary style failed: {e}", exc_info=True)
@@ -474,6 +694,7 @@ class GoogleSheetsService:
             merged,
             value_input_option="USER_ENTERED"
         )
+        self._apply_summary_dropdowns(worksheet)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
         """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
@@ -499,11 +720,11 @@ class GoogleSheetsService:
 
                 # สร้าง Header ให้ชีทใหม่
                 headers = [
-                    "Trans ID", "WE88 ออก", "Agent", "Bank",
-                    "Trans ID", "12Play ออก", "Agent", "Bank",
-                    "Uwin ออก", "Agent", "Bank",
-                    "Trans ID", "VIP WE รับ", "Time", "Agent",
-                    "Trans ID", "VIP 12 รับ P", "Time", "Agent",
+                    "Trans ID", "WE88 ออก", "บัญชี", "Bank",
+                    "Trans ID", "12Play ออก", "บัญชี", "Bank",
+                    "Uwin ออก", "บัญชี", "Bank",
+                    "Trans ID", "VIP WE รับ", "Time", "บัญชี",
+                    "Trans ID", "VIP 12 รับ P", "Time", "บัญชี",
 
                     "KB-CP",
                     "KB-CPกระแส",
@@ -576,6 +797,7 @@ class GoogleSheetsService:
 
             # เขียนข้อมูลเจาะจงเฉพาะช่วง L{next_row}:S{next_row}
             worksheet.update(f"L{next_row}:S{next_row}", [row])
+            self._apply_agent_dropdowns_to_row(worksheet, next_row)
 
             # 1. อัปเดต Summary รายวัน
             self.update_daily_summary(worksheet)

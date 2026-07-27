@@ -169,7 +169,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if txn:
             if txn.status in ["Receive", "Reject"]:
                 await query.answer(f"สลิปนี้ถูก {txn.status} ไปแล้วครับ!", show_alert=True)
-                await query.edit_message_reply_markup(reply_markup=None)
+                await query.edit_message_text(
+                    text=f"📌 สลิปนี้ถูก {txn.status} ไปแล้วครับ!",
+                    reply_markup=None,
+                )
                 return
 
             if action == "receive":
@@ -185,13 +188,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db.commit()
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
                 
-                await query.answer("บันทึกข้อมูลเรียบร้อย!") 
+                await query.answer("บันทึกข้อมูลเรียบร้อย!")
                 await query.edit_message_text(
                     text=f"📌 **ดำเนินการเรียบร้อย!**\n"
                         f"แอดมินกดปุ่ม: {action_text}\n"
                         f"Ref Group: `{txn.batch_id[:15]}...`\n"
                         f"*(สถานะอัปเดตเป็น {txn.status})*\n"
-                        f"📊 บันทึกลง Sheet สำเร็จ", 
+                        f"📊 บันทึกลง Sheet สำเร็จ",
+                    reply_markup=None,
                     # parse_mode="MarkdownV2"
                 )
             else:
