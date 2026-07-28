@@ -89,7 +89,7 @@ class GoogleSheetsService:
         "SCB-MT",
         "KKP-LS",
         "KB-CPทรรศนะ",
-        "KB-CKทรรศนะ",
+        "KB-CKBกระแส",
     ]
 
     SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
@@ -106,8 +106,8 @@ class GoogleSheetsService:
         "TTB-Yo",
         "SCB-Yo",
         "GSB-Yo",
-        "KB-CKทรรศนะ",
-        "KB-CPทรรศนะ",
+        "KB-CKBกระแส",
+        "KB-CKกระแส",
         "KKP-LS",
     ]
 
