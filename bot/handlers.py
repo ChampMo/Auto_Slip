@@ -13,7 +13,7 @@ from database.models import UsedQR
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    print(f"👉 [DEBUG] ได้รับข้อความจากกลุ่มที่มี Chat ID คือ: {chat_id}")
+    print(f"👉 [DEBUG] Received a message from the group with Chat ID: {chat_id}")
     msg_id = update.message.message_id
     caption = update.message.caption or ""
     
@@ -26,11 +26,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 👇 เพิ่มส่วนปริ้นท์ Payload ของ QR Code ลง Terminal ตรงนี้
     if qr_data_list:
-        print(f"📸 [DEBUG] สแกนพบ QR Code จำนวน {len(qr_data_list)} ใบ:")
+        print(f"📸 [DEBUG] Detected {len(qr_data_list)} QR code(s):")
         for idx, qr in enumerate(qr_data_list, 1):
-            print(f"   ใบที่ {idx} -> Payload: {qr}")
+            print(f"   QR Code {idx} -> Payload: {qr}")
     else:
-        print("📸 [DEBUG] ไม่พบ QR Code ในรูปภาพนี้")
+        print("📸 [DEBUG] No QR code detected in this image")
     # 👆 ----------------------------------------------------
     
     if qr_data_list:
@@ -39,13 +39,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status, txn = process_incoming_slip(db, qr_data_list, chat_id, msg_id, caption)
             
             if status == "duplicate":
-                await update.message.reply_text("⚠️ `[Duplicate]` มีสลิปอย่างน้อย 1 ใบในรูปนี้ถูกนำไปใช้งานแล้ว!", parse_mode="Markdown")
+                await update.message.reply_text(
+                    "⚠️ `[Duplicate]` At least one slip in this image has already been used!",
+                    parse_mode="Markdown"
+                )
             
             elif status == "pending":
-                print(f"⏳ รับกลุ่มสลิป {len(qr_data_list)} ใบ... รอคู่")
+                print(f"⏳ Received a group of {len(qr_data_list)} slip(s)... Waiting for a match.")
             
             elif status == "matched":
-                print(f"🎉 จับคู่สำเร็จ! กำลังยิง API ตรวจสอบสลิป {len(qr_data_list)} ใบ...")
+                print(f"🎉 Match found! Verifying {len(qr_data_list)} slip(s) via API...")
                 
                 target_chat_id = txn.g_user_chat_id if txn.g_user_chat_id else chat_id
                 target_msg_id = int(txn.g_user_msg_id) if txn.g_user_msg_id else msg_id
@@ -73,7 +76,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         api_success = False
                         error_msg = api_result.get("error", "UNKNOWN_ERROR")
                         # ดึงข้อความแจ้งเตือนภาษาไทยที่ส่งมาจาก verify_slip
-                        user_error_msg = api_result.get("user_message", f"⚠️ ระบบตรวจสอบสลิปขัดข้อง ({error_msg})")
+                        user_error_msg = api_result.get("user_message", f"⚠️ Slip verification system error ({error_msg})")
                         break # ถ้าพังใบเดียว ให้ถือว่าล่มทั้งก้อนเลย
                 
                 if api_success:
@@ -108,11 +111,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_message(
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
-                            text=f"✅ **ตรวจสอบผ่านครบ {len(qr_data_list)} ใบ!**\n"
-                                f"ผู้โอน: `{sender_names_str}`\n"
-                                f"ยอดรวมจริง: `{total_api_amount}`\n"
-                                f"ยอดในแชท: `{chat_amount}`\n\n"
-                                f"👉 *โปรดตรวจสอบและกดปุ่ม ✅ Receive*", 
+                           text=f"✅ **All {len(qr_data_list)} Slip(s) Verified Successfully!**\n"
+                                f"Sender: `{sender_names_str}`\n"
+                                f"Verified Amount: `{total_api_amount}`\n"
+                                f"Chat Amount: `{chat_amount}`\n\n"
+                                f"👉 *Please review the information and click ✅ Receive.*",
                             reply_markup=keyboard,
                             # parse_mode="MarkdownV2"
                         )
@@ -123,16 +126,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         reject_reason = ""
                         if chat_amount != total_api_amount:
-                            reject_reason += f"❌ ยอดเงิน: ในสลิป `{total_api_amount}` | แจ้งมา `{chat_amount}`\n"
+                            reject_reason += f"❌ Amount: Slip `{total_api_amount}` | Reported `{chat_amount}`\n"
                         if not is_name_match:
-                            reject_reason += f"❌ ชื่อผู้โอน: ในสลิป `{sender_names_str}` | แจ้งมา `{chat_name}`\n"
+                            reject_reason += f"❌ Sender Name: Slip `{sender_names_str}` | Reported `{chat_name}`\n"
                             
                         await context.bot.send_message(
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
-                            text=f"❌ **Auto-Rejected: ข้อมูลไม่ตรงกัน!**\n"
+                            text=f"❌ **Auto-Rejected: Information Mismatch!**\n"
                                 f"{reject_reason}\n"
-                                f"*(ระบบปฏิเสธสลิปชุดนี้อัตโนมัติ)*",
+                                f"*(This slip group has been automatically rejected.)*",
                             # parse_mode="MarkdownV2"
                         )
                 else:
@@ -141,7 +144,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     alert_text = (
                         f"{user_error_msg}\n\n"
-                        f"👉 *โปรดตรวจสอบสลิปทั้งหมดด้วยตัวเอง (Manual) และกดปุ่มด้านล่างเพื่อดำเนินการต่อครับ*"
+                        f"👉 *Please perform a manual review of all slips and click one of the buttons below to proceed.*"
                     )
 
                     await context.bot.send_message(
@@ -158,55 +161,62 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     action, short_ref = query.data.split('_', 1)
-    
+
     from database.models import Transaction
     from database.session import SessionLocal
     from database.crud import add_audit_log
-    
+
     with SessionLocal() as db:
         txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
-        
+
         if txn:
             if txn.status in ["Receive", "Reject"]:
-                await query.answer(f"สลิปนี้ถูก {txn.status} ไปแล้วครับ!", show_alert=True)
+                await query.answer(f" Slip {txn.status} already!", show_alert=True)
                 await query.edit_message_text(
-                    text=f"📌 สลิปนี้ถูก {txn.status} ไปแล้วครับ!",
+                    text=f"📌 Slip {txn.status} already!",
                     reply_markup=None,
                 )
                 return
 
             if action == "receive":
                 txn.status = "Receive"
-                action_text = "✅ อนุมัติรับยอด (Receive)"
+                action_text = "✅ Receive"
             elif action == "reject":
                 txn.status = "Reject"
-                action_text = "❌ ปฏิเสธ (Reject)"
-                
+                action_text = "❌ Reject"
+
+            # ตอบ Telegram ทันที ก่อนทำงานที่ใช้เวลานาน
+            await query.answer("Saving data to Google Sheets...")
+
             sheet_success, sheet_error_msg = append_to_sheet(txn)
-            
+
             if sheet_success:
                 db.commit()
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
-                
-                await query.answer("บันทึกข้อมูลเรียบร้อย!")
+
                 await query.edit_message_text(
-                    text=f"📌 **ดำเนินการเรียบร้อย!**\n"
-                        f"แอดมินกดปุ่ม: {action_text}\n"
-                        f"Ref Group: `{txn.batch_id[:15]}...`\n"
-                        f"*(สถานะอัปเดตเป็น {txn.status})*\n"
-                        f"📊 บันทึกลง Sheet สำเร็จ",
+                    text=f"📌 **Completed Successfully!**\n"
+                        f"Action: {action_text}\n"
+                        f"Reference Group: `{txn.batch_id[:15]}...`\n"
+                        f"*(Status updated to {txn.status})*\n"
+                        f"📊 Successfully saved to Google Sheets.",
                     reply_markup=None,
                     # parse_mode="MarkdownV2"
                 )
             else:
-                db.rollback() 
+                db.rollback()
                 short_err = str(sheet_error_msg)[:150]
-                await query.answer(
-                    text=f"⚠️ บันทึกลง Sheet ไม่สำเร็จ!\n\n{short_err}\n\n👉 โปรดแก้ไฟล์แล้วกดใหม่อีกครั้ง",
-                    show_alert=True
+
+                await query.edit_message_text(
+                    text=f"⚠️ Failed to save to Google Sheet!\n\n"
+                        f"{short_err}\n\n"
+                        f"👉 Please fix the file and try again",
+                    reply_markup=None,
                 )
+
         else:
-            await query.answer("ไม่พบข้อมูลในระบบ", show_alert=True)
-            await query.edit_message_text(text="⚠️ **เกิดข้อผิดพลาด:** ไม่พบข้อมูลนี้ในระบบ",
-                                        # parse_mode="Markdown"
-                                        )
+            await query.answer("Record not found.", show_alert=True)
+            await query.edit_message_text(
+                text="⚠️ **Error:** This record was not found in the system.",
+                # parse_mode="Markdown"
+            )

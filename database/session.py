@@ -25,4 +25,4 @@ def init_db():
     
     # สั่งสร้างตาราง
     Base.metadata.create_all(bind=engine)
-    print(f"✅ สร้างตารางและเชื่อมต่อ Database สำเร็จ! ({SQLALCHEMY_DATABASE_URL})")
+    print(f"✅ Database initialized successfully! ({SQLALCHEMY_DATABASE_URL})")
