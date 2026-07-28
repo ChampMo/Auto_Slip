@@ -509,41 +509,34 @@ class GoogleSheetsService:
             logger.error(f"Summary style failed: {e}", exc_info=True)
 
     def update_daily_summary(self, worksheet: gspread.Worksheet):
-        
         records = worksheet.get_all_values()
         if len(records) <= 1:
             return
 
-        user_count, user_total = 0, 0.0
-        trans_count, trans_total = 0, 0.0
         customers: Dict[str, Dict[str, float]] = {}
 
         # วนลูปอ่านข้อมูลข้าม Header (Row 1)
         for row in records[1:]:
-            # USER (L,M)
-            col_user_id = row[11] if len(row) > 11 else ""
-            col_user_amt = row[12] if len(row) > 12 else ""
+            # อ่านข้อมูลกลุ่ม VIP WE (L, M)
+            col_we_id = row[11] if len(row) > 11 else ""
+            col_we_amt = row[12] if len(row) > 12 else ""
 
-            # TRANS (P,Q)
-            col_trans_id = row[15] if len(row) > 15 else ""
-            col_trans_amt = row[16] if len(row) > 16 else ""
+            # อ่านข้อมูลกลุ่ม VIP 12 (P, Q)
+            col_12_id = row[15] if len(row) > 15 else ""
+            col_12_amt = row[16] if len(row) > 16 else ""
 
-            # คำนวณฝั่ง USER
-            if col_user_id:
-                user_count += 1
-                user_total += self._parse_float(col_user_amt)
+            # 💡 ดึง ID และ ยอดเงิน มาจากช่องที่มีข้อมูล (เนื่องจากมันจะถูกเติมแค่ฝั่งใดฝั่งหนึ่ง)
+            active_id = col_we_id if str(col_we_id).strip() else col_12_id
+            active_amt = col_we_amt if str(col_we_id).strip() else col_12_amt
 
-            # คำนวณฝั่ง TRANS
-            if col_trans_id:
-                trans_count += 1
-                amt = self._parse_float(col_trans_amt)
-                trans_total += amt
+            if active_id and str(active_id).strip() != "-":
+                amt = self._parse_float(active_amt)
 
-                if col_trans_id not in customers:
-                    customers[col_trans_id] = {"count": 0, "total": 0.0}
+                if active_id not in customers:
+                    customers[active_id] = {"count": 0, "total": 0.0}
 
-                customers[col_trans_id]["count"] += 1
-                customers[col_trans_id]["total"] += amt
+                customers[active_id]["count"] += 1
+                customers[active_id]["total"] += amt
 
         # จัดโครงสร้างตาราง Summary
 
@@ -765,7 +758,7 @@ class GoogleSheetsService:
             if formatted_time.startswith("0"):
                 formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
 
-            user_id = txn.chat_user_id or txn.sender_names or txn.chat_fullname or "-"
+            # ดึงข้อมูล Trans ID
             trans_identifier = (
                 txn.chat_trans_id
                 or txn.chat_user_id
@@ -774,29 +767,34 @@ class GoogleSheetsService:
                 or "-"
             )
             
-            # แปลงยอดเงินเป็น float เพื่อให้ Google Sheets นำไปจัดรูปแบบตัวเลข #,##0.00 ได้ถูก
-            user_amt = self._parse_float(txn.chat_amount)
+            # แปลงยอดเงินเป็น float
             trans_amt = self._parse_float(txn.api_total_amount or txn.chat_amount)
+            amt_display = trans_amt if trans_amt > 0 else "-"
+            bank_display = txn.chat_bank or "-"
+            
+            # 💡 สร้าง Block ข้อมูล 4 คอลัมน์ [Trans ID, ยอดเงิน, Time, บัญชี]
+            data_block = [trans_identifier, amt_display, formatted_time, bank_display]
 
-            row = [
-                # USER
-                user_id,
-                user_amt if user_amt > 0 else "-",
-                formatted_time,
-                txn.chat_bank or "-",
-                # TRANS
-                trans_identifier,
-                trans_amt if trans_amt > 0 else "-",
-                formatted_time,
-                txn.chat_bank or "-",
-            ]
+            # 💡 เช็ค Category จาก DB ว่าเป็นกลุ่มไหน
+            category_name = str(txn.category).strip().upper()
+            
+            if "12" in category_name or category_name == "VIP_12":
+                # --- กรณีเป็นกลุ่ม VIP 12 ---
+                # นับความลึกเฉพาะคอลัมน์ P (คอลัมน์ที่ 16)
+                col_p_values = worksheet.col_values(16)
+                next_row = len(col_p_values) + 1
+                update_range = f"P{next_row}:S{next_row}"
+            else:
+                # --- กรณีเป็นกลุ่ม VIP WE (หรือค่าเริ่มต้น) ---
+                # นับความลึกเฉพาะคอลัมน์ L (คอลัมน์ที่ 12)
+                col_l_values = worksheet.col_values(12)
+                next_row = len(col_l_values) + 1
+                update_range = f"L{next_row}:O{next_row}"
 
-            # หาแถวว่างถัดไปเฉพาะคอลัมน์ L
-            col_l_values = worksheet.col_values(12)
-            next_row = len(col_l_values) + 1
-
-            # เขียนข้อมูลเจาะจงเฉพาะช่วง L{next_row}:S{next_row}
-            worksheet.update(f"L{next_row}:S{next_row}", [row])
+            # 📝 สั่งเขียนข้อมูลลงไปเฉพาะ 4 ช่องของกลุ่มตัวเอง (ไม่ก้าวก่ายฝั่งตรงข้าม)
+            worksheet.update(update_range, [data_block])
+            
+            # สร้าง Dropdown ให้กับบรรทัดใหม่
             self._apply_agent_dropdowns_to_row(worksheet, next_row)
 
             # 1. อัปเดต Summary รายวัน
