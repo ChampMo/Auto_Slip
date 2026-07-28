@@ -6,10 +6,10 @@ from database.crud import get_transaction, add_audit_log
 
 
 GROUP_CONFIG = {
-    "-1004418034373": {"category": "CAT_A", "is_user": True},   # กลุ่ม User ของ Category A
-    "-1003573441688": {"category": "CAT_A", "is_user": False},  # กลุ่ม Trans ของ Category A
-    "-5153291438": {"category": "CAT_B", "is_user": True},   # กลุ่ม User ของ Category B
-    "-5356341183": {"category": "CAT_B", "is_user": False},  # กลุ่ม Trans ของ Category B
+    "-1004418034373": {"category": "VIP_WE", "is_user": True},   # กลุ่ม User ของ Category A
+    "-1003573441688": {"category": "VIP_WE", "is_user": False},  # กลุ่ม Trans ของ Category A
+    "-5153291438": {"category": "VIP_12", "is_user": True},   # กลุ่ม User ของ Category B
+    "-5356341183": {"category": "VIP_12", "is_user": False},  # กลุ่ม Trans ของ Category B
 }
 
 

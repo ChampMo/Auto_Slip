@@ -115,7 +115,10 @@ class GoogleSheetsService:
         """จัดรูปแบบตารางหลัก A:AJ"""
 
         try:
-            last_row = len(worksheet.col_values(19))  # S
+            last_row = max(
+                len(worksheet.col_values(12)),
+                len(worksheet.col_values(16))
+            )
 
             base_style = {
                 "borders": {
@@ -801,6 +804,7 @@ class GoogleSheetsService:
             self.update_daily_summary(worksheet)
 
             self._apply_main_table_style(worksheet)
+            
             self._apply_summary_style(worksheet)
 
             logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (Row {next_row})")
