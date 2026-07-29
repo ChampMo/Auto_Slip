@@ -28,6 +28,7 @@ class Transaction(Base):
     # --- ข้อมูลจาก API (เปลี่ยนเป็นแบบรวมยอด) ---
     api_total_amount = Column(Float, nullable=True) # ยอดรวมทุกใบ
     sender_names = Column(String(300), nullable=True) # ชื่อคนโอนทุกคนรวมกัน
+    receiver_account = Column(String(255), nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

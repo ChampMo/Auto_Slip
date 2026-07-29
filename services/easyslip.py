@@ -35,10 +35,24 @@ def verify_slip(qr_payload: str) -> dict:
                 name_data = data["sender"]["account"]["name"]
                 sender = name_data.get("th", name_data.get("en", "ไม่ระบุชื่อ"))
                 
+            # 👇 --- เพิ่มโค้ดชุดนี้สำหรับดึงข้อมูล "ผู้รับ" ---
+            receiver_info = "-"
+            if "receiver" in data and "account" in data["receiver"]:
+                recv_acc = data["receiver"]["account"]
+                
+                # ลองหา "เลขบัญชี" ก่อน
+                if "bank" in recv_acc and "account" in recv_acc["bank"]:
+                    receiver_info = recv_acc["bank"]["account"]
+                # ถ้าไม่มีเลขบัญชี (เช่นเคส TrueMoney ของคุณ) ให้ดึง "ชื่อ" มาแทน
+                elif "name" in recv_acc and "th" in recv_acc["name"]:
+                    receiver_info = recv_acc["name"]["th"]
+            # 👆 -----------------------------------------
+                
             return {
                 "success": True,
                 "amount": float(amount),
                 "sender": sender,
+                "receiver": receiver_info,  # 👈 ส่งค่าที่ดึงได้กลับไปด้วย
                 "raw_data": data
             }
         else:

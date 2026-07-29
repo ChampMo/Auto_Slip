@@ -56,6 +56,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # ตัวแปรสำหรับรวมข้อมูล
                 total_api_amount = 0.0
                 all_senders = []
+                all_receivers = []
                 api_success = True
                 error_msg = ""
                 user_error_msg = "" # 👈 ตัวแปรสำหรับรับข้อความภาษาไทย
@@ -66,7 +67,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if api_result["success"]:
                         total_api_amount += api_result["amount"]
                         all_senders.append(api_result["sender"])
-                        
+                        all_receivers.append(api_result["receiver"])
                         # ค้นหา UsedQR ใบนี้ แล้วยัด JSON ใส่เข้าไป
                         used_qr = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
                         if used_qr:
@@ -82,11 +83,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if api_success:
                     chat_amount = txn.chat_amount
                     sender_names_str = ", ".join(all_senders) 
+                    receiver_names_str = ", ".join(all_receivers)
                     chat_name = txn.chat_fullname or ""
                     
                     # บันทึกยอดรวมและชื่อรวมลง DB
                     txn.api_total_amount = total_api_amount
                     txn.sender_names = sender_names_str
+                    txn.receiver_names = receiver_names_str
                     
                     # 🔍 ลอจิกตรวจสอบชื่อ (เช็คเฉพาะชื่อจริง ไม่เอาคำนำหน้าและนามสกุล)
                     is_name_match = True
