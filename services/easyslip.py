@@ -1,4 +1,5 @@
 import requests
+import re
 from core.config import config
 
 def verify_slip(qr_payload: str) -> dict:
@@ -40,10 +41,17 @@ def verify_slip(qr_payload: str) -> dict:
             if "receiver" in data and "account" in data["receiver"]:
                 recv_acc = data["receiver"]["account"]
                 
-                # ลองหา "เลขบัญชี" ก่อน
+                # 1. ลองหา "เลขบัญชี" ก่อน
                 if "bank" in recv_acc and "account" in recv_acc["bank"]:
-                    receiver_info = recv_acc["bank"]["account"]
-                # ถ้าไม่มีเลขบัญชี (เช่นเคส TrueMoney ของคุณ) ให้ดึง "ชื่อ" มาแทน
+                    raw_acc = recv_acc["bank"]["account"]  # API จะให้มาเป็น "xxx-x-x4662-x"
+                    
+                    # 💡 ใช้ Regex สกัดเฉพาะ "ตัวเลข" ออกมา
+                    extracted_digits = re.sub(r'\D', '', raw_acc)
+                    
+                    # ถ้าสกัดเลขได้ (เช่น 4662) ให้ใช้ตัวเลขนั้น ถ้าสกัดไม่ได้ให้ใช้ค่าเดิมกันเหนียว
+                    receiver_info = extracted_digits if extracted_digits else raw_acc
+                    
+                # 2. ถ้าไม่มีเลขบัญชี (เช่น ทรูมันนี่) ให้ดึง "ชื่อ" มาแทน
                 elif "name" in recv_acc and "th" in recv_acc["name"]:
                     receiver_info = recv_acc["name"]["th"]
             # 👆 -----------------------------------------
