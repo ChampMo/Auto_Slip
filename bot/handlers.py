@@ -40,8 +40,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if status == "duplicate":
                 await update.message.reply_text(
-                    "⚠️ `[Duplicate]` At least one slip in this image has already been used!",
-                    parse_mode="Markdown"
+                    "⚠️ Duplicate: At least one slip in this image has already been used."
                 )
             
             elif status == "pending":
@@ -114,13 +113,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_message(
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
-                           text=f"✅ **All {len(qr_data_list)} Slip(s) Verified Successfully!**\n"
-                                f"Sender: `{sender_names_str}`\n"
-                                f"Verified Amount: `{total_api_amount}`\n"
-                                f"Chat Amount: `{chat_amount}`\n\n"
-                                f"👉 *Please review the information and click ✅ Receive.*",
+                           text=(f"All {len(qr_data_list)} slip(s) verified successfully!\n\n"
+                                 f"Sender(s): {sender_names_str}\n"
+                                 f"Verified total: {total_api_amount}\n"
+                                 f"Reported amount: {chat_amount}\n\n"
+                                 f"Please review the information and click the ✅ Receive button to accept."),
                             reply_markup=keyboard,
-                            # parse_mode="MarkdownV2"
                         )
                     else:
                         txn.status = "Reject"
@@ -136,10 +134,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_message(
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
-                            text=f"❌ **Auto-Rejected: Information Mismatch!**\n"
-                                f"{reject_reason}\n"
-                                f"*(This slip group has been automatically rejected.)*",
-                            # parse_mode="MarkdownV2"
+                            text=(f"❌ Auto-Rejected: Information Mismatch\n\n"
+                                  f"{reject_reason}\n"
+                                  f"(This slip group has been automatically rejected.)"),
                         )
                 else:
                     # แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
@@ -147,15 +144,14 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     alert_text = (
                         f"{user_error_msg}\n\n"
-                        f"👉 *Please perform a manual review of all slips and click one of the buttons below to proceed.*"
+                        f"Please perform a manual review of all slips and click one of the buttons below to proceed."
                     )
 
                     await context.bot.send_message(
                         chat_id=target_chat_id,
                         reply_to_message_id=target_msg_id,
-                        text=alert_text, 
+                        text=alert_text,
                         reply_markup=keyboard,
-                        # parse_mode="MarkdownV2"
                     )
                     
     if os.path.exists(temp_path):
@@ -186,7 +182,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_sheet_locked(db, txn.batch_id):
                 await query.answer("This slip is already being saved or has been saved.", show_alert=True)
                 await query.edit_message_text(
-                    text=f"📌 **Already Saved / In Progress**\nSelected Bank: `{bank_value}`",
+                    text=(f"Already saved / In progress\nSelected Bank: {bank_value}"),
                     reply_markup=None,
                 )
                 return
@@ -195,7 +191,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_audit_log(db, txn.batch_id, "saving_started")
             await query.answer("Saving manual bank selection to Google Sheets...")
             await query.edit_message_text(
-                text=f"⏳ Saving to Google Sheets...\nSelected Bank: `{bank_value}`",
+                text=(f"Saving to Google Sheets...\nSelected Bank: {bank_value}"),
                 reply_markup=None,
             )
 
@@ -205,15 +201,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 add_audit_log(db, txn.batch_id, "sheet_saved")
                 db.commit()
                 await query.edit_message_text(
-                    text=f"📌 **Manual Receive Completed!**\n"
-                        f"Selected Bank: `{bank_value}`\n"
-                        f"📊 Saved to Google Sheets.",
+                    text=(f"✅ Manual Receive Completed\n"
+                          f"Selected Bank: {bank_value}\n\n"
+                          f"Saved to Google Sheets."),
                     reply_markup=None,
                 )
             else:
                 db.rollback()
                 await query.edit_message_text(
-                    text=f"⚠️ Failed to save to Google Sheet!\n\n{sheet_error_msg}",
+                    text=(f"Failed to save to Google Sheet.\n\n{sheet_error_msg}"),
                     reply_markup=None,
                 )
             return
@@ -231,9 +227,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if txn:
             if txn.status in ["Receive", "Reject"]:
-                await query.answer(f" Slip {txn.status} already!", show_alert=True)
+                status_icon = "✅" if txn.status == "Receive" else "❌"
+                await query.answer(f"Slip already {txn.status}.", show_alert=True)
                 await query.edit_message_text(
-                    text=f"📌 Slip {txn.status} already!",
+                    text=(f"{status_icon} Slip already {txn.status}."),
                     reply_markup=None,
                 )
                 return
@@ -243,7 +240,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 action_text = "✅ Receive"
                 await query.answer("Please select a bank/account value before saving...")
                 await query.edit_message_text(
-                    text="🧾 Please choose the bank/account value for this slip:",
+                    text="Please choose the bank/account value for this slip:",
                     reply_markup=get_bank_selection_keyboard(txn.batch_id),
                 )
                 return
@@ -256,9 +253,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # หากกำลังถูกบันทึกหรือบันทึกแล้ว ให้แจ้งผู้ใช้และไม่ดำเนินการ
             if is_sheet_locked(db, txn.batch_id):
-                await query.answer(f" Slip already saved or in-progress!", show_alert=True)
+                await query.answer("Slip already saved or in-progress!", show_alert=True)
                 await query.edit_message_text(
-                    text=f"📌 Slip already saved or in-progress!",
+                    text=(f"Slip already saved or in-progress!"),
                     reply_markup=None,
                 )
                 return
@@ -266,7 +263,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # สร้าง lock ว่าเริ่มการบันทึกแล้ว และลบปุ่มออกเพื่อป้องกันการกดซ้ำ
             add_audit_log(db, txn.batch_id, "saving_started")
             await query.edit_message_text(
-                text="⏳ Saving to Google Sheets...",
+                text="Saving to Google Sheets...",
                 reply_markup=None,
             )
 
@@ -279,28 +276,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
 
                 await query.edit_message_text(
-                    text=f"📌 **Completed Successfully!**\n"
-                        f"Action: {action_text}\n"
-                        f"Reference Group: `{txn.batch_id[:15]}...`\n"
-                        f"*(Status updated to {txn.status})*\n"
-                        f"📊 Successfully saved to Google Sheets.",
+                    text=(f"Completed successfully!\n"
+                          f"Action: {action_text}\n"
+                          f"Reference Group: {txn.batch_id[:15]}...\n"
+                          f"(Status updated to {txn.status})\n\n"
+                          f"Saved to Google Sheets."),
                     reply_markup=None,
-                    # parse_mode="MarkdownV2"
                 )
             else:
                 db.rollback()
                 short_err = str(sheet_error_msg)[:150]
-
                 await query.edit_message_text(
-                    text=f"⚠️ Failed to save to Google Sheet!\n\n"
-                        f"{short_err}\n\n"
-                        f"👉 Please fix the file and try again",
+                    text=(f"Failed to save to Google Sheet.\n\n"
+                          f"{short_err}\n\n"
+                          f"Please fix the file and try again."),
                     reply_markup=None,
                 )
 
         else:
             await query.answer("Record not found.", show_alert=True)
             await query.edit_message_text(
-                text="⚠️ **Error:** This record was not found in the system.",
-                # parse_mode="Markdown"
+                text=("Error: This record was not found in the system."),
             )

@@ -52,7 +52,7 @@ def verify_slip(qr_payload: str) -> dict:
                 amount = amount_data
             
             # ดึงชื่อคนโอน
-            sender = "ไม่ระบุชื่อ"
+            sender = "Unknown"
             if "sender" in data and "account" in data["sender"] and "name" in data["sender"]["account"]:
                 name_data = data["sender"]["account"]["name"]
                 sender = name_data.get("th", name_data.get("en", "ไม่ระบุชื่อ"))
@@ -91,36 +91,35 @@ def verify_slip(qr_payload: str) -> dict:
                 "raw_data": data
             }
         else:
-            # 🛑 ปรับปรุง UX: แปลง Error จาก API เป็นภาษาไทยให้ User เข้าใจง่าย
+            # Convert API error messages into user-friendly English messages
             raw_error_msg = result.get("message", "").upper()
             status_code = result.get("status")
-            
-            # ดักจับ Error ยอดฮิตและแปลความหมาย
+
             if "QUOTA" in raw_error_msg or "EXCEEDED" in raw_error_msg:
-                user_friendly_msg = "⚠️ โควต้าการตรวจสอบสลิปหมด หรือแพ็กเกจ EasySlip หมดอายุแล้ว กรุณาต่ออายุแพ็กเกจ"
+                user_friendly_msg = "Quota exceeded or EasySlip package expired. Please renew your subscription."
                 error_type = "QUOTA_EXCEEDED"
             elif "UNAUTHORIZED" in raw_error_msg or status_code == 401:
-                user_friendly_msg = "🔒 การยืนยันตัวตนล้มเหลว (API Key ของ EasySlip ไม่ถูกต้อง)"
+                user_friendly_msg = "Authentication failed (invalid EasySlip API key)."
                 error_type = "UNAUTHORIZED"
             elif "NOT FOUND" in raw_error_msg or "INVALID" in raw_error_msg:
-                user_friendly_msg = "❌ ไม่พบข้อมูลสลิปนี้ในระบบธนาคาร หรือ QR Code ไม่ถูกต้อง (อาจเป็นสลิปปลอม)"
+                user_friendly_msg = "Slip not found in bank records, or QR code is invalid (possible fake slip)."
                 error_type = "INVALID_SLIP"
             elif "MAINTENANCE" in raw_error_msg:
-                user_friendly_msg = "🛠️ ระบบ API หรือธนาคารต้นทางกำลังปรับปรุงชั่วคราว"
+                user_friendly_msg = "Verification service or source bank is under maintenance. Please try again later."
                 error_type = "MAINTENANCE"
             else:
-                user_friendly_msg = f"🚨 ระบบตรวจสอบขัดข้องจากทาง API (ข้อความ: {result.get('message')})"
+                user_friendly_msg = f"Slip verification API error (message: {result.get('message')})"
                 error_type = "UNKNOWN_ERROR"
 
             return {
                 "success": False,
-                "error": error_type, # คืนค่า Code สั้นๆ เผื่อเอาไปเขียน if-else ในไฟล์อื่น
-                "user_message": user_friendly_msg # คืนค่าข้อความภาษาไทยสวยๆ ไปแสดงผล
+                "error": error_type,
+                "user_message": user_friendly_msg
             }
             
     except Exception as e:
         return {
             "success": False,
             "error": "EXCEPTION",
-            "user_message": f"🌐 เกิดข้อผิดพลาดในการเชื่อมต่ออินเทอร์เน็ตหรือเซิร์ฟเวอร์: {str(e)}"
+            "user_message": f"Network or server error during slip verification: {str(e)}"
         }
