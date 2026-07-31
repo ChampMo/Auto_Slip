@@ -22,7 +22,7 @@ def start_scheduler() -> BackgroundScheduler:
     try:
         scheduler.add_job(
             create_today_sheet,
-            trigger=CronTrigger(hour=1, minute=0, timezone="Asia/Bangkok"),
+            trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Bangkok"),
             id="daily_create_today_sheet",
             name="Create today's Google Sheet tab",
             replace_existing=True,
