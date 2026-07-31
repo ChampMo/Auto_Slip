@@ -22,7 +22,7 @@ def start_scheduler() -> BackgroundScheduler:
     try:
         scheduler.add_job(
             create_today_sheet,
-            trigger=CronTrigger(hour=9, minute=57, timezone="Asia/Bangkok"),
+            trigger=CronTrigger(hour=1, minute=0, timezone="Asia/Bangkok"),
             id="daily_create_today_sheet",
             name="Create today's Google Sheet tab",
             replace_existing=True,
@@ -39,7 +39,7 @@ def start_scheduler() -> BackgroundScheduler:
 
         scheduler.start()
         logger.info("Scheduler started successfully")
-        logger.info("Daily sheet creation job is scheduled for 09:30 Asia/Bangkok")
+        logger.info("Daily sheet creation job is scheduled for 01:00 Asia/Bangkok")
         logger.info("Next scheduled execution: %s", scheduler.get_jobs()[0].next_run_time)
         return scheduler
     except Exception as exc:
