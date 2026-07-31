@@ -13,8 +13,13 @@ if __name__ == "__main__":
     if not config.BOT_TOKEN:
         print("❌ ไม่พบ BOT_TOKEN ระบบไม่สามารถทำงานได้")
         exit()
-        
-    # สร้างตัวควบคุม Bot
+
+    scheduler = None
+    try:
+        scheduler = start_scheduler()
+    except Exception as exc:
+        print(f"⚠️ Scheduler ไม่สามารถเริ่มได้: {exc}")
+
     app = ApplicationBuilder().token(config.BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(button_callback))
