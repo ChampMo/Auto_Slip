@@ -7,6 +7,7 @@ from core.config import config
 from google.oauth2.service_account import Credentials
 import gspread
 from services.gdrive import drive_service
+from services.easyslip import ACCOUNT_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -73,43 +74,10 @@ class GoogleSheetsService:
         except (ValueError, TypeError):
             return 0.0
 
-    AGENT_ACCOUNT_DROPDOWN_VALUES = [
-        "SCB-CP",
-        "KB-CP",
-        "BAY-CKB",
-        "KB-CKB",
-        "KKP-Jak",
-        "GSB-Jak",
-        "BBL-Ploy",
-        "GSB-Ativit",
-        "KKP-Yo",
-        "TTB-Yo",
-        "SCB-Yo",
-        "GSB-Yo",
-        "SCB-MT",
-        "KKP-LS",
-        "KB-CPทรรศนะ",
-        "KB-CKBกระแส",
-    ]
+    AGENT_ACCOUNT_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
 
     SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
-    SUMMARY_BANK_DROPDOWN_VALUES = [
-        "SCB-CP",
-        "KB-CP",
-        "BAY-CKB",
-        "KB-CKB",
-        "KKP-Jak",
-        "GSB-Jak",
-        "BBL-Ploy",
-        "GSB-Ativit",
-        "KKP-Yo",
-        "TTB-Yo",
-        "SCB-Yo",
-        "GSB-Yo",
-        "KB-CKBกระแส",
-        "KB-CKกระแส",
-        "KKP-LS",
-    ]
+    SUMMARY_BANK_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
 
     def _apply_main_table_style(self, worksheet: gspread.Worksheet):
         """จัดรูปแบบตารางหลัก A:AJ"""
@@ -511,6 +479,113 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Summary style failed: {e}", exc_info=True)
 
+    def _write_summary_tables(self, worksheet: gspread.Worksheet, customers: Dict[str, Dict[str, float]] | None = None):
+        """Write the summary tables into the sheet for new or updated daily sheets."""
+        if customers is None:
+            customers = {}
+
+        summary = [
+            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
+            ["บัญชี", "We88", "12T", "Uwin THB", "Total"],
+
+            ["P", "=SUMIF(C:C,AK3,B:B)", "=SUMIF(G:G,AK3,F:F)", "=SUMIF(J:J,AK3,I:I)", "=SUM(AL3:AN3)"],
+            ["G", "=SUMIF(C:C,AK4,B:B)", "=SUMIF(G:G,AK4,F:F)", "=SUMIF(J:J,AK4,I:I)", "=SUM(AL4:AN4)"],
+            ["B", "=SUMIF(C:C,AK5,B:B)", "=SUMIF(G:G,AK5,F:F)", "=SUMIF(J:J,AK5,I:I)", "=SUM(AL5:AN5)"],
+            ["T", "=SUMIF(C:C,AK6,B:B)", "=SUMIF(G:G,AK6,F:F)", "=SUMIF(J:J,AK6,I:I)", "=SUM(AL6:AN6)"],
+            ["N", "=SUMIF(C:C,AK7,B:B)", "=SUMIF(G:G,AK7,F:F)", "=SUMIF(J:J,AK7,I:I)", "=SUM(AL7:AN7)"],
+            ["Y", "=SUMIF(C:C,AK8,B:B)", "=SUMIF(G:G,AK8,F:F)", "=SUMIF(J:J,AK8,I:I)", "=SUM(AL8:AN8)"],
+
+            [
+                "ยอดที่ไม่มีชื่อ",
+                "=B303-SUM(AL3:AL8)",
+                "=F303-SUM(AM3:AM8)",
+                "=I303-SUM(AN3:AN8)",
+                "=SUM(AL9:AN9)"
+            ],
+
+            [
+                "ยอดเงินออกทั้งหมด",
+                "=SUM(AL3:AL9)",
+                "=SUM(AM3:AM9)",
+                "=SUM(AN3:AN9)",
+                "=SUM(AO3:AO9)"
+            ],
+        ]
+
+        bank_table = [
+            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
+            ["Bank", "We88", "12T", "Uwin THB", "Total"],
+
+            ["SCB-CP", "=SUMIF(D:D,AP3,B:B)", "=SUMIF(H:H,AP3,F:F)", "=SUMIF(K:K,AP3,I:I)", "=SUM(AQ3:AS3)"],
+            ["KB-CP", "=SUMIF(D:D,AP4,B:B)", "=SUMIF(H:H,AP4,F:F)", "=SUMIF(K:K,AP4,I:I)", "=SUM(AQ4:AS4)"],
+            ["BAY-CKB", "=SUMIF(D:D,AP5,B:B)", "=SUMIF(H:H,AP5,F:F)", "=SUMIF(K:K,AP5,I:I)", "=SUM(AQ5:AS5)"],
+            ["KB-CKB", "=SUMIF(D:D,AP6,B:B)", "=SUMIF(H:H,AP6,F:F)", "=SUMIF(K:K,AP6,I:I)", "=SUM(AQ6:AS6)"],
+            ["KKP-Jak", "=SUMIF(D:D,AP7,B:B)", "=SUMIF(H:H,AP7,F:F)", "=SUMIF(K:K,AP7,I:I)", "=SUM(AQ7:AS7)"],
+            ["GSB-Jak", "=SUMIF(D:D,AP8,B:B)", "=SUMIF(H:H,AP8,F:F)", "=SUMIF(K:K,AP8,I:I)", "=SUM(AQ8:AS8)"],
+            ["BBL-Ploy", "=SUMIF(D:D,AP9,B:B)", "=SUMIF(H:H,AP9,F:F)", "=SUMIF(K:K,AP9,I:I)", "=SUM(AQ9:AS9)"],
+            ["GSB-Ativit", "=SUMIF(D:D,AP10,B:B)", "=SUMIF(H:H,AP10,F:F)", "=SUMIF(K:K,AP10,I:I)", "=SUM(AQ10:AS10)"],
+            ["KKP-Yo", "=SUMIF(D:D,AP11,B:B)", "=SUMIF(H:H,AP11,F:F)", "=SUMIF(K:K,AP11,I:I)", "=SUM(AQ11:AS11)"],
+            ["TTB-Yo", "=SUMIF(D:D,AP12,B:B)", "=SUMIF(H:H,AP12,F:F)", "=SUMIF(K:K,AP12,I:I)", "=SUM(AQ12:AS12)"],
+            ["SCB-Yo", "=SUMIF(D:D,AP13,B:B)", "=SUMIF(H:H,AP13,F:F)", "=SUMIF(K:K,AP13,I:I)", "=SUM(AQ13:AS13)"],
+            ["GSB-Yo", "=SUMIF(D:D,AP14,B:B)", "=SUMIF(H:H,AP14,F:F)", "=SUMIF(K:K,AP14,I:I)", "=SUM(AQ14:AS14)"],
+            ["KB-CKทรรศนะ", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
+            ["KB-CPทรรศนะ", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
+            ["KKP-LS", "=SUMIF(D:D,AP17,B:B)", "=SUMIF(H:H,AP17,F:F)", "=SUMIF(K:K,AP17,I:I)", "=SUM(AQ17:AS17)"],
+            ["", "=SUMIF(D:D,AP18,B:B)", "=SUMIF(H:H,AP18,F:F)", "=SUMIF(K:K,AP18,I:I)", "=SUM(AQ18:AS18)"],
+            ["ถอนเงินออกทั้งหมด", "=SUM(AQ3:AQ18)", "=SUM(AR3:AR18)", "=SUM(AS3:AS18)", "=SUM(AT3:AT18)"],
+        ]
+
+        deposit_table = [
+            ["สรุปยอดเงินโอนเข้าทั้งหมด / แยกบัญชี (Deposit)", "", "", "", "", "", "", "", ""],
+            ["บัญชี", "We88", "12T", "", "Total", "We88", "12T", "", "Total"],
+            ["SCB-CP", "=SUMIF(O:O,AU3,M:M)", "=SUMIF(S:S,AU3,Q:Q)", "", "=SUM(AV3:AW3)", "=COUNTIF(O:O,AU3)", "=COUNTIF(S:S,AU3)", "", "=SUM(AZ3:BA3)"],
+            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AV4:AW4)"],
+            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AV5:AW5)"],
+            ["TTB-Yo", "=SUMIF(O:O,AU6,M:M)", "=SUMIF(S:S,AU6,Q:Q)", "", "=SUM(AV6:AW6)", "=COUNTIF(O:O,AU6)", "=COUNTIF(S:S,AU6)", "", "=SUM(AZ6:BA6)"],
+            ["SCB-Yo", "=SUMIF(O:O,AU7,M:M)", "=SUMIF(S:S,AU7,Q:Q)", "", "=SUM(AV7:AW7)", "=COUNTIF(O:O,AU7)", "=COUNTIF(S:S,AU7)", "", "=SUM(AZ7:BA7)"],
+            ["", 0, 0, "", 0, 0, 0, "", 0],
+            ["", 0, 0, "", 0, 0, 0, "", 0],
+            [
+                "ยอดเงินเข้าทั้งหมด",
+                "=SUM(AV3:AV9)",
+                "=SUM(AW3:AW9)",
+                "",
+                "=SUM(AY3:AY9)",
+                "=SUM(AZ3:AZ9)",
+                "=SUM(BA3:BA7)",
+                "",
+                "=SUM(BC3:BC7)"
+            ],
+        ]
+
+        for name, data in customers.items():
+            if data["count"] >= 3:
+                summary.append([name, data["count"], data["total"]])
+
+        summary = [row + [""] * (3 - len(row)) for row in summary]
+        end_row = len(summary)
+        max_rows = max(len(summary), len(bank_table), len(deposit_table))
+
+        while len(summary) < max_rows:
+            summary.append([""] * 5)
+
+        while len(bank_table) < max_rows:
+            bank_table.append([""] * 5)
+
+        while len(deposit_table) < max_rows:
+            deposit_table.append([""] * 9)
+
+        merged = []
+        for i in range(max_rows):
+            merged.append(summary[i] + bank_table[i] + deposit_table[i])
+
+        worksheet.update(
+            f"AK1:BC{len(merged)}",
+            merged,
+            value_input_option="USER_ENTERED"
+        )
+        self._apply_summary_dropdowns(worksheet)
+
     def create_today_sheet(self):
         """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี"""
         spreadsheet = self._get_dynamic_spreadsheet()
@@ -567,8 +642,8 @@ class GoogleSheetsService:
         self._apply_main_table_style(worksheet)
         self._apply_summary_style(worksheet)
 
-        # สร้าง Summary ตั้งแต่แรก
-        self.update_daily_summary(worksheet)
+        # สร้าง Summary ตั้งแต่แรก พร้อมกับ Sheet ใหม่
+        self._write_summary_tables(worksheet)
 
         # ลบ Sheet1 (ถ้ามี)
         try:
@@ -609,156 +684,7 @@ class GoogleSheetsService:
                 customers[active_id]["count"] += 1
                 customers[active_id]["total"] += amt
 
-        # จัดโครงสร้างตาราง Summary
-
-# =========================
-# Withdraw Account
-# =========================
-
-        summary = [
-            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
-            ["บัญชี", "We88", "12T", "Uwin THB", "Total"],
-
-            ["P", "=SUMIF(C:C,AK3,B:B)", "=SUMIF(G:G,AK3,F:F)", "=SUMIF(J:J,AK3,I:I)", "=SUM(AL3:AN3)"],
-            ["G", "=SUMIF(C:C,AK4,B:B)", "=SUMIF(G:G,AK4,F:F)", "=SUMIF(J:J,AK4,I:I)", "=SUM(AL4:AN4)"],
-            ["B", "=SUMIF(C:C,AK5,B:B)", "=SUMIF(G:G,AK5,F:F)", "=SUMIF(J:J,AK5,I:I)", "=SUM(AL5:AN5)"],
-            ["T", "=SUMIF(C:C,AK6,B:B)", "=SUMIF(G:G,AK6,F:F)", "=SUMIF(J:J,AK6,I:I)", "=SUM(AL6:AN6)"],
-            ["N", "=SUMIF(C:C,AK7,B:B)", "=SUMIF(G:G,AK7,F:F)", "=SUMIF(J:J,AK7,I:I)", "=SUM(AL7:AN7)"],
-            ["Y", "=SUMIF(C:C,AK8,B:B)", "=SUMIF(G:G,AK8,F:F)", "=SUMIF(J:J,AK8,I:I)", "=SUM(AL8:AN8)"],
-
-            [
-                "ยอดที่ไม่มีชื่อ",
-                "=B303-SUM(AL3:AL8)",
-                "=F303-SUM(AM3:AM8)",
-                "=I303-SUM(AN3:AN8)",
-                "=SUM(AL9:AN9)"
-            ],
-
-            [
-                "ยอดเงินออกทั้งหมด",
-                "=SUM(AL3:AL9)",
-                "=SUM(AM3:AM9)",
-                "=SUM(AN3:AN9)",
-                "=SUM(AO3:AO9)"
-            ],
-        ]
-
-
-        # =========================
-        # Bank Table
-        # =========================
-
-        bank_table = [
-            ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
-            ["Bank", "We88", "12T", "Uwin THB", "Total"],
-
-            ["SCB-CP", "=SUMIF(D:D,AP3,B:B)", "=SUMIF(H:H,AP3,F:F)", "=SUMIF(K:K,AP3,I:I)", "=SUM(AQ3:AS3)"],
-            ["KB-CP", "=SUMIF(D:D,AP4,B:B)", "=SUMIF(H:H,AP4,F:F)", "=SUMIF(K:K,AP4,I:I)", "=SUM(AQ4:AS4)"],
-            ["BAY-CKB", "=SUMIF(D:D,AP5,B:B)", "=SUMIF(H:H,AP5,F:F)", "=SUMIF(K:K,AP5,I:I)", "=SUM(AQ5:AS5)"],
-            ["KB-CKB", "=SUMIF(D:D,AP6,B:B)", "=SUMIF(H:H,AP6,F:F)", "=SUMIF(K:K,AP6,I:I)", "=SUM(AQ6:AS6)"],
-            ["KKP-Jak", "=SUMIF(D:D,AP7,B:B)", "=SUMIF(H:H,AP7,F:F)", "=SUMIF(K:K,AP7,I:I)", "=SUM(AQ7:AS7)"],
-            ["GSB-Jak", "=SUMIF(D:D,AP8,B:B)", "=SUMIF(H:H,AP8,F:F)", "=SUMIF(K:K,AP8,I:I)", "=SUM(AQ8:AS8)"],
-            ["BBL-Ploy", "=SUMIF(D:D,AP9,B:B)", "=SUMIF(H:H,AP9,F:F)", "=SUMIF(K:K,AP9,I:I)", "=SUM(AQ9:AS9)"],
-            ["GSB-Ativit", "=SUMIF(D:D,AP10,B:B)", "=SUMIF(H:H,AP10,F:F)", "=SUMIF(K:K,AP10,I:I)", "= SUM(AQ10:AS10)"],
-            ["KKP-Yo", "= SUMIF(D:D,AP11,B:B)", "= SUMIF(H:H,AP11,F:F)", "= SUMIF(K:K,AP11,I:I)", "= SUM(AQ11:AS11)"],
-            ["TTB-Yo", "= SUMIF(D:D,AP12,B:B)", "= SUMIF(H:H,AP12,F:F)", "= SUMIF(K:K,AP12,I:I)", "= SUM(AQ12:AS12)"],
-            ["SCB-Yo", "= SUMIF(D:D,AP13,B:B)", "= SUMIF(H:H,AP13,F:F)", "= SUMIF(K:K,AP13,I:I)","= SUM(AQ13:AS13)"],
-            ["GSB-Yo", "=SUMIF(D:D,AP14,B:B)", "=SUMIF(H:H,AP14,F:F)", "=SUMIF(K:K,AP14,I:I)", "=SUM(AQ14:AS14)"],
-            ["KB-CKทรรศนะ", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
-            ["KB-CPทรรศนะ", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
-            ["KKP-LS", "=SUMIF(D:D,AP17,B:B)", "=SUMIF(H:H,AP17,F:F)", "=SUMIF(K:K,AP17,I:I)", "=SUM(AQ17:AS17)"],
-
-            [
-                "",
-                "=SUMIF(D:D,AP18,B:B)",
-                "=SUMIF(H:H,AP18,F:F)",
-                "=SUMIF(K:K,AP18,I:I)",
-                "=SUM(AQ18:AS18)"
-            ],
-
-            [
-                "ถอนเงินออกทั้งหมด",
-                "=SUM(AQ3:AQ18)",
-                "=SUM(AR3:AR18)",
-                "=SUM(AS3:AS18)",
-                "=SUM(AT3:AT18)"
-            ],
-            
-        ]
-
-
-        # =========================
-        # Deposit Table
-        # =========================
-
-        deposit_table = [
-            ["สรุปยอดเงินโอนเข้าทั้งหมด / แยกบัญชี (Deposit)", "", "", "", "", "", "", "", ""],
-
-            ["บัญชี", "We88", "12T", "", "Total",
-            "We88", "12T", "", "Total"],
-
-            ["SCB-CP", "=SUMIF(O:O,AU3,M:M)", "=SUMIF(S:S,AU3,Q:Q)", "", "=SUM(AV3:AW3)", "=COUNTIF(O:O,AU3)", "=COUNTIF(S:S,AU3)", "", "=SUM(AZ3:BA3)"],
-            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AV4:AW4)"],
-            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AV5:AW5)"],
-            ["TTB-Yo", "=SUMIF(O:O,AU6,M:M)", "=SUMIF(S:S,AU6,Q:Q)", "", "=SUM(AV6:AW6)", "=COUNTIF(O:O,AU6)", "=COUNTIF(S:S,AU6)", "", "=SUM(AZ6:BA6)"],
-            ["SCB-Yo", "=SUMIF(O:O,AU7,M:M)", "=SUMIF(S:S,AU7,Q:Q)", "", "=SUM(AV7:AW7)", "=COUNTIF(O:O,AU7)", "=COUNTIF(S:S,AU7)", "", "=SUM(AZ7:BA7)"],
-
-            ["",0,0,"",0,0,0,"",0],
-            ["",0,0,"",0,0,0,"",0],
-
-            [
-                "ยอดเงินเข้าทั้งหมด",
-                "=SUM(AV3:AV9)",
-                "=SUM(AW3:AW9)",
-                "",
-                "=SUM(AY3:AY9)",
-                "=SUM(AZ3:AZ9)",
-                "=SUM(BA3:BA7)",
-                "",
-                "=SUM(BC3:BC7)"
-            ],
-        ]
-
-        
-        for name, data in customers.items():
-            if data["count"] >= 3:
-                summary.append([name, data["count"], data["total"]])
-
-        # เขียนข้อมูลกลับไปยัง Column L1:N
-        summary = [row + [""] * (3 - len(row)) for row in summary]
-        end_row = len(summary)
-        max_rows = max(
-            len(summary),
-            len(bank_table),
-            len(deposit_table)
-        )
-
-        while len(summary) < max_rows:
-            summary.append([""] * 5)
-
-        while len(bank_table) < max_rows:
-            bank_table.append([""] * 5)
-
-        while len(deposit_table) < max_rows:
-            deposit_table.append([""] * 9)
-
-
-        merged = []
-
-        for i in range(max_rows):
-            merged.append(
-                summary[i]
-                + bank_table[i]
-                + deposit_table[i]
-            )
-
-
-        worksheet.update(
-            f"AK1:BC{len(merged)}",
-            merged,
-            value_input_option="USER_ENTERED"
-        )
-        self._apply_summary_dropdowns(worksheet)
+        self._write_summary_tables(worksheet, customers)
 
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
         """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""

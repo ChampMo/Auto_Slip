@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 from core.scanner import read_qr_code
-from bot.keyboards import get_approval_keyboard
+from bot.keyboards import get_approval_keyboard, get_bank_selection_keyboard
 from database.session import SessionLocal
 from core.matcher import process_incoming_slip
 from services.easyslip import verify_slip
@@ -163,13 +163,51 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    action, short_ref = query.data.split('_', 1)
+    callback_data = query.data or ""
 
     from database.models import Transaction
     from database.session import SessionLocal
     from database.crud import add_audit_log
 
     with SessionLocal() as db:
+        if callback_data.startswith("bank_"):
+            _, short_ref, bank_value = callback_data.split("_", 2)
+            txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
+            if not txn:
+                await query.answer("Record not found.", show_alert=True)
+                return
+
+            txn.chat_bank = bank_value
+            txn.receiver_account = bank_value
+            txn.status = "Receive"
+            db.commit()
+            add_audit_log(db, txn.batch_id, "manual_bank_selected")
+            await query.answer("Saving manual bank selection to Google Sheets...")
+
+            sheet_success, sheet_error_msg = append_to_sheet(txn)
+            if sheet_success:
+                await query.edit_message_text(
+                    text=f"📌 **Manual Receive Completed!**\n"
+                        f"Selected Bank: `{bank_value}`\n"
+                        f"📊 Saved to Google Sheets.",
+                    reply_markup=None,
+                )
+            else:
+                await query.edit_message_text(
+                    text=f"⚠️ Failed to save to Google Sheet!\n\n{sheet_error_msg}",
+                    reply_markup=None,
+                )
+            return
+
+        if callback_data.startswith("back_"):
+            _, short_ref = callback_data.split("_", 1)
+            txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
+            if txn:
+                await query.answer("Returning to approval options...")
+                await query.edit_message_reply_markup(reply_markup=get_approval_keyboard(txn.batch_id))
+            return
+
+        action, short_ref = callback_data.split('_', 1)
         txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
 
         if txn:
@@ -184,6 +222,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if action == "receive":
                 txn.status = "Receive"
                 action_text = "✅ Receive"
+                await query.answer("Please select a bank/account value before saving...")
+                await query.edit_message_text(
+                    text="🧾 Please choose the bank/account value for this slip:",
+                    reply_markup=get_bank_selection_keyboard(txn.batch_id),
+                )
+                return
             elif action == "reject":
                 txn.status = "Reject"
                 action_text = "❌ Reject"

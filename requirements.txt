@@ -11,3 +11,4 @@ gspread==6.1.0
 gspread
 google-auth
 google-api-python-client
+apscheduler==3.10.4
