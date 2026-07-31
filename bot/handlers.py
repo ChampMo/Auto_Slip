@@ -6,7 +6,7 @@ from bot.keyboards import get_approval_keyboard, get_bank_selection_keyboard
 from database.session import SessionLocal
 from core.matcher import process_incoming_slip
 from services.easyslip import verify_slip
-from database.crud import add_audit_log
+from database.crud import add_audit_log, is_sheet_saved, is_sheet_locked
 from services.gsheets import append_to_sheet
 import json
 from database.models import UsedQR
@@ -180,12 +180,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             txn.chat_bank = bank_value
             txn.receiver_account = bank_value
             txn.status = "Receive"
-            db.commit()
             add_audit_log(db, txn.batch_id, "manual_bank_selected")
+
+            # หากกำลังถูกบันทึกหรือบันทึกแล้ว ให้แจ้งผู้ใช้และไม่ดำเนินการ
+            if is_sheet_locked(db, txn.batch_id):
+                await query.answer("This slip is already being saved or has been saved.", show_alert=True)
+                await query.edit_message_text(
+                    text=f"📌 **Already Saved / In Progress**\nSelected Bank: `{bank_value}`",
+                    reply_markup=None,
+                )
+                return
+
+            # สร้าง lock ว่าเริ่มการบันทึกแล้ว และแก้ไขข้อความให้หายปุ่ม (แสดงสถานะ Saving)
+            add_audit_log(db, txn.batch_id, "saving_started")
             await query.answer("Saving manual bank selection to Google Sheets...")
+            await query.edit_message_text(
+                text=f"⏳ Saving to Google Sheets...\nSelected Bank: `{bank_value}`",
+                reply_markup=None,
+            )
 
             sheet_success, sheet_error_msg = append_to_sheet(txn)
             if sheet_success:
+                # บันทึก marker ว่าได้บันทึกลง sheet แล้ว
+                add_audit_log(db, txn.batch_id, "sheet_saved")
+                db.commit()
                 await query.edit_message_text(
                     text=f"📌 **Manual Receive Completed!**\n"
                         f"Selected Bank: `{bank_value}`\n"
@@ -193,6 +211,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=None,
                 )
             else:
+                db.rollback()
                 await query.edit_message_text(
                     text=f"⚠️ Failed to save to Google Sheet!\n\n{sheet_error_msg}",
                     reply_markup=None,
@@ -235,9 +254,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ตอบ Telegram ทันที ก่อนทำงานที่ใช้เวลานาน
             await query.answer("Saving data to Google Sheets...")
 
+            # หากกำลังถูกบันทึกหรือบันทึกแล้ว ให้แจ้งผู้ใช้และไม่ดำเนินการ
+            if is_sheet_locked(db, txn.batch_id):
+                await query.answer(f" Slip already saved or in-progress!", show_alert=True)
+                await query.edit_message_text(
+                    text=f"📌 Slip already saved or in-progress!",
+                    reply_markup=None,
+                )
+                return
+
+            # สร้าง lock ว่าเริ่มการบันทึกแล้ว และลบปุ่มออกเพื่อป้องกันการกดซ้ำ
+            add_audit_log(db, txn.batch_id, "saving_started")
+            await query.edit_message_text(
+                text="⏳ Saving to Google Sheets...",
+                reply_markup=None,
+            )
+
             sheet_success, sheet_error_msg = append_to_sheet(txn)
 
             if sheet_success:
+                # บันทึก marker ว่าได้บันทึกลง sheet แล้ว
+                add_audit_log(db, txn.batch_id, "sheet_saved")
                 db.commit()
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
 

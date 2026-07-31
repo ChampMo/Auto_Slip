@@ -689,8 +689,9 @@ class GoogleSheetsService:
     def append_to_sheet(self, txn) -> Tuple[bool, str]:
         """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
         if str(txn.status).strip().lower() == "reject":
-            logger.info("สถานะ Reject ข้ามการบันทึกลง Google Sheets")
+            logger.info("Status Reject Skip saving to Google Sheets")
             return True, ""
+        # Duplicate write guard is handled by DB audit logs (checked by caller)
         
         try:
             spreadsheet = self._get_dynamic_spreadsheet()

@@ -10,3 +10,20 @@ def add_audit_log(db: Session, qr_ref: str, action: str):
     log = AuditLog(qr_ref=qr_ref, action=action)
     db.add(log)
     db.commit()
+
+
+def is_sheet_saved(db: Session, batch_id: str) -> bool:
+    """ตรวจสอบว่าเคยบันทึกไปยัง Google Sheets สำหรับ batch นี้หรือไม่"""
+    return db.query(AuditLog).filter(AuditLog.qr_ref == batch_id, AuditLog.action == 'sheet_saved').first() is not None
+
+
+def is_sheet_locked(db: Session, batch_id: str) -> bool:
+    """ตรวจสอบว่า batch นี้กำลังถูกบันทึกหรือบันทึกแล้ว (lock)
+
+    ใช้ action 'saving_started' เป็นตัวบ่งชี้ว่ามีการเริ่มกระบวนการบันทึก
+    และ 'sheet_saved' แสดงว่าบันทึกเสร็จแล้ว
+    """
+    return db.query(AuditLog).filter(
+        AuditLog.qr_ref == batch_id,
+        AuditLog.action.in_(['saving_started', 'sheet_saved'])
+    ).first() is not None
