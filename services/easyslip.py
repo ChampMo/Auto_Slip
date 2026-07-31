@@ -2,6 +2,27 @@ import requests
 import re
 from core.config import config
 
+ACCOUNT_MAPPING = {
+    "5111": "SCB-CP",
+    "9298": "BAY-CKB",
+    "2872": "KB-CKB",
+    "7726": "KB-CKB97726",
+    "9349": "KKP-Jak",
+    "9809": "GSB-Jak",
+    "1307": "BBL-Ploy",
+    "9877": "GSB-Ativit",
+    "2984": "KKP-LS",
+    "0009": "KB-BS",
+    "6523": "GSB-Teera",
+    "3872": "GSB-Yo",
+    "5149": "TTB-Yo",
+    "9057": "SCB-Yo",
+    "0914": "TTB-Jak",
+    "0234": "SCB-MT20234",
+    "7446": "KB-CP37446",
+    "5761": "KB-CP05761",
+}
+
 def verify_slip(qr_payload: str) -> dict:
     # URL ตาม Document (v1/verify)
     url = "https://api.easyslip.com/v1/verify" 
@@ -46,10 +67,16 @@ def verify_slip(qr_payload: str) -> dict:
                     raw_acc = recv_acc["bank"]["account"]  # API จะให้มาเป็น "xxx-x-x4662-x"
                     
                     # 💡 ใช้ Regex สกัดเฉพาะ "ตัวเลข" ออกมา
+                    # 💡 ใช้ Regex สกัดเฉพาะตัวเลข
                     extracted_digits = re.sub(r'\D', '', raw_acc)
-                    
-                    # ถ้าสกัดเลขได้ (เช่น 4662) ให้ใช้ตัวเลขนั้น ถ้าสกัดไม่ได้ให้ใช้ค่าเดิมกันเหนียว
-                    receiver_info = extracted_digits if extracted_digits else raw_acc
+
+                    receiver_account = extracted_digits if extracted_digits else raw_acc
+
+                    # ใช้เลข 4 ตัวท้ายในการค้นหา
+                    receiver_info = ACCOUNT_MAPPING.get(
+                        receiver_account[-4:],
+                        receiver_account[-4:]
+                    )
                     
                 # 2. ถ้าไม่มีเลขบัญชี (เช่น ทรูมันนี่) ให้ดึง "ชื่อ" มาแทน
                 elif "name" in recv_acc and "th" in recv_acc["name"]:

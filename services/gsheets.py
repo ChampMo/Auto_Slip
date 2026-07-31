@@ -511,6 +511,74 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Summary style failed: {e}", exc_info=True)
 
+    def create_today_sheet(self):
+        """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี"""
+        spreadsheet = self._get_dynamic_spreadsheet()
+        sheet_name = datetime.now().strftime("%d-%m-%Y")
+
+        # ถ้ามีชีทแล้ว ไม่ต้องสร้าง
+        try:
+            spreadsheet.worksheet(sheet_name)
+            logger.info(f"📄 Sheet '{sheet_name}' มีอยู่แล้ว")
+            return
+        except gspread.exceptions.WorksheetNotFound:
+            pass
+
+        logger.info(f"📄 กำลังสร้างชีทสำหรับวันที่ {sheet_name}...")
+
+        worksheet = spreadsheet.add_worksheet(
+            title=sheet_name,
+            rows=1000,
+            cols=55
+        )
+
+        headers = [
+            "Trans ID", "WE88 ออก", "บัญชี", "Bank",
+            "Trans ID", "12Play ออก", "บัญชี", "Bank",
+            "Uwin ออก", "บัญชี", "Bank",
+            "Trans ID", "VIP WE รับ", "Time", "บัญชี",
+            "Trans ID", "VIP 12 รับ P", "Time", "บัญชี",
+
+            "KB-CP",
+            "KB-CPกระแส",
+            "BAY-CKB",
+            "KB-CKB",
+            "KB-CKBกระแส",
+            "KKP-Jak",
+            "GSB-Jak",
+            "BBL-Ploy",
+            "GSB-Ativit",
+            "KKP-LS",
+            "SCB-CP",
+            "GSB-Yo",
+            "TTB-Yo",
+            "SCB-Yo",
+            "SCB-MT",
+            "Cash ตา",
+            "Cash Bas"
+        ]
+
+        while len(headers) < 55:
+            headers.append("")
+
+        worksheet.update("A1:BC1", [headers])
+
+        # ใส่ Style
+        self._apply_main_table_style(worksheet)
+        self._apply_summary_style(worksheet)
+
+        # สร้าง Summary ตั้งแต่แรก
+        self.update_daily_summary(worksheet)
+
+        # ลบ Sheet1 (ถ้ามี)
+        try:
+            sheet1 = spreadsheet.worksheet("Sheet1")
+            spreadsheet.del_worksheet(sheet1)
+        except Exception:
+            pass
+
+        logger.info(f"✅ สร้างชีท '{sheet_name}' สำเร็จ")
+
     def update_daily_summary(self, worksheet: gspread.Worksheet):
         records = worksheet.get_all_values()
         if len(records) <= 1:
@@ -707,54 +775,9 @@ class GoogleSheetsService:
             try:
                 worksheet = spreadsheet.worksheet(sheet_name)
             except gspread.exceptions.WorksheetNotFound:
-                logger.info(f"📄 กำลังสร้างชีทสำหรับวันที่ {sheet_name}...")
-                worksheet = spreadsheet.add_worksheet(
-                    title=sheet_name,
-                    rows=1000,
-                    cols=55
-                )
+                self.create_today_sheet()
+                worksheet = spreadsheet.worksheet(sheet_name)
 
-                # สร้าง Header ให้ชีทใหม่
-                headers = [
-                    "Trans ID", "WE88 ออก", "บัญชี", "Bank",
-                    "Trans ID", "12Play ออก", "บัญชี", "Bank",
-                    "Uwin ออก", "บัญชี", "Bank",
-                    "Trans ID", "VIP WE รับ", "Time", "บัญชี",
-                    "Trans ID", "VIP 12 รับ P", "Time", "บัญชี",
-
-                    "KB-CP",
-                    "KB-CPกระแส",
-                    "BAY-CKB",
-                    "KB-CKB",
-                    "KB-CKBกระแส",
-                    "KKP-Jak",
-                    "GSB-Jak",
-                    "BBL-Ploy",
-                    "GSB-Ativit",
-                    "KKP-LS",
-                    "SCB-CP",
-                    "GSB-Yo",
-                    "TTB-Yo",
-                    "SCB-Yo",
-                    "SCB-MT",
-                    "Cash ตา",
-                    "Cash Bas"
-                ]
-
-                while len(headers) < 55:
-                    headers.append("")
-                worksheet.update("A1:BC1", [headers])
-
-                self._apply_main_table_style(worksheet)
-                self._apply_summary_style(worksheet)
-
-
-                # ลบ Sheet1 ตั้งต้นออก (ถ้ามี)
-                try:
-                    sheet1 = spreadsheet.worksheet("Sheet1")
-                    spreadsheet.del_worksheet(sheet1)
-                except Exception:
-                    pass
 
             # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
             formatted_time = now.strftime("%H:%M")
