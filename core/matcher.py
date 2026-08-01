@@ -14,20 +14,10 @@ GROUP_CONFIG = {
 
 
 def extract_data_from_caption(caption: str, is_user_group: bool):
-    # 👇 1. เพิ่ม "bank": None ไว้ใน Dictionary เริ่มต้น
-    data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None, "bank": None}
+    data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None}
     
     amount_match = re.search(r'(?i)AMOUNT\s*(?:[:]\s*THB|THB\s*[:])\s*([0-9,.]+)', caption)
     if amount_match: data["amount"] = float(amount_match.group(1).replace(',', ''))
-
-    # 👇 2. ลอจิกดึงชื่อธนาคารจากบรรทัดที่ 2
-    if caption:
-        lines = caption.strip().split('\n')
-        if len(lines) >= 2:
-            second_line = lines[1].strip() # ดึงบรรทัดที่ 2 (เช่น TTB ANUCHA)
-            if second_line:
-                # ตัดเอาเฉพาะคำแรกสุด (TTB)
-                data["bank"] = second_line.split()[0]
 
     if is_user_group:
         user_match = re.search(r'(?i)User\s*:\s*(\d+)', caption)
@@ -88,8 +78,6 @@ def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str,
         
         # 💡 จุดที่ 3: กรณี Pending หรือ Reject ให้รับข้อมูลใหม่เข้าไปอัปเดตทับของเดิม
         if txn.status.lower() in ["pending", "reject", "rejected"]:
-            if extracted.get("bank") and not txn.chat_bank:
-                txn.chat_bank = extracted["bank"]
                 
             if is_user_group:
                 txn.g_user_chat_id = chat_id_str
@@ -117,7 +105,6 @@ def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str,
     else:
         # บันทึกกลุ่มใหม่ (First time)
         new_txn = Transaction(batch_id=batch_id, category=category, status="pending")
-        new_txn.chat_bank = extracted.get("bank")
         
         if is_user_group:
             new_txn.g_user_chat_id = chat_id_str

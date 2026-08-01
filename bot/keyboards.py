@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from services.easyslip import ACCOUNT_MAPPING
+from services.easyslip import BANK_DROPDOWN_VALUES
 
 
 def get_approval_keyboard(batch_id: str):
@@ -17,7 +17,7 @@ def get_approval_keyboard(batch_id: str):
 
 def get_bank_selection_keyboard(batch_id: str):
     short_ref = batch_id[:40] if len(batch_id) > 40 else batch_id
-    bank_values = sorted(set(ACCOUNT_MAPPING.values()))
+    bank_values = BANK_DROPDOWN_VALUES
 
     buttons = [
         InlineKeyboardButton(value, callback_data=f"bank_{short_ref}_{value}")

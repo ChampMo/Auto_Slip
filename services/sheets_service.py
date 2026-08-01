@@ -136,7 +136,7 @@ class GoogleSheetsService:
                     index,
                     txn.created_at.strftime("%Y-%m-%d %H:%M:%S") if txn.created_at else "",
                     txn.category or "",
-                    txn.chat_bank or "",
+                    txn.receiver_account or txn.chat_bank or "",
                     txn.api_total_amount if txn.api_total_amount is not None else txn.chat_amount or 0,
                     txn.status or "",
                     txn.raw_user_caption or "",

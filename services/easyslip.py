@@ -23,6 +23,28 @@ ACCOUNT_MAPPING = {
     "5761": "KB-CP05761",
 }
 
+BANK_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
+
+
+def extract_bank_code_from_receiver_account(recv_acc: dict) -> str:
+    """Extract a 4-digit bank code from the receiver account payload if available."""
+    if not isinstance(recv_acc, dict):
+        return ""
+
+    bank_info = recv_acc.get("bank") or {}
+    if isinstance(bank_info, dict):
+        code = str(bank_info.get("code", "") or "").strip()
+        if re.fullmatch(r"\d{4}", code):
+            return code
+
+        account_value = str(bank_info.get("account", "") or "").strip()
+        if account_value:
+            digits = re.sub(r"\D", "", account_value)
+            return digits[-4:] if len(digits) >= 4 else digits
+
+    return ""
+
+
 def verify_slip(qr_payload: str) -> dict:
     # URL ตาม Document (v1/verify)
     url = "https://api.easyslip.com/v1/verify" 
@@ -62,22 +84,11 @@ def verify_slip(qr_payload: str) -> dict:
             if "receiver" in data and "account" in data["receiver"]:
                 recv_acc = data["receiver"]["account"]
                 
-                # 1. ลองหา "เลขบัญชี" ก่อน
-                if "bank" in recv_acc and "account" in recv_acc["bank"]:
-                    raw_acc = recv_acc["bank"]["account"]  # API จะให้มาเป็น "xxx-x-x4662-x"
-                    
-                    # 💡 ใช้ Regex สกัดเฉพาะ "ตัวเลข" ออกมา
-                    # 💡 ใช้ Regex สกัดเฉพาะตัวเลข
-                    extracted_digits = re.sub(r'\D', '', raw_acc)
-
-                    receiver_account = extracted_digits if extracted_digits else raw_acc
-
-                    # ใช้เลข 4 ตัวท้ายในการค้นหา
-                    receiver_info = ACCOUNT_MAPPING.get(
-                        receiver_account[-4:],
-                        receiver_account[-4:]
-                    )
-                    
+                # 1. ลองหา 4 หลักธนาคารก่อนจากข้อมูล bank.code ก่อน
+                bank_code = extract_bank_code_from_receiver_account(recv_acc)
+                if bank_code:
+                    receiver_info = ACCOUNT_MAPPING.get(bank_code, bank_code)
+                
                 # 2. ถ้าไม่มีเลขบัญชี (เช่น ทรูมันนี่) ให้ดึง "ชื่อ" มาแทน
                 elif "name" in recv_acc and "th" in recv_acc["name"]:
                     receiver_info = recv_acc["name"]["th"]

@@ -1,16 +1,20 @@
 import os
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 from core.scanner import read_qr_code
 from bot.keyboards import get_approval_keyboard, get_bank_selection_keyboard
+from bot.verification_flow import VerificationDecision, determine_verification_action
 from database.session import SessionLocal
 from core.matcher import process_incoming_slip
 from services.easyslip import verify_slip
-from database.crud import add_audit_log, is_sheet_saved, is_sheet_locked
+from database.crud import add_audit_log, is_sheet_saved, is_sheet_locked, remove_transaction_and_qr_links
 from services.gsheets import append_to_sheet
 import json
 from database.models import UsedQR
 from telegram.error import TimedOut, NetworkError
+
+logger = logging.getLogger(__name__)
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
@@ -117,6 +121,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     txn.api_total_amount = total_api_amount
                     txn.sender_names = sender_names_str
                     txn.receiver_names = receiver_names_str
+                    txn.receiver_account = receiver_names_str  # ♻️ ใช้ค่า mapped เต็มแทน chat_bank
                     
                     # 🔍 ลอจิกตรวจสอบชื่อ (เช็คเฉพาะชื่อจริง ไม่เอาคำนำหน้าและนามสกุล)
                     is_name_match = True
@@ -132,26 +137,49 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if first_name and first_name not in sender_names_str:
                             is_name_match = False
                     
-                    # เปรียบเทียบทั้ง ยอดเงิน และ ชื่อผู้โอน
-                    if chat_amount == total_api_amount and is_name_match:
+                    verification_decision = determine_verification_action(
+                        api_success=True,
+                        amount_matches=(chat_amount == total_api_amount),
+                        name_matches=is_name_match,
+                    )
+
+                    if verification_decision == VerificationDecision.AUTO_RECEIVE:
+                        txn.status = "Receive"
+                        txn.api_total_amount = total_api_amount
+                        txn.sender_names = sender_names_str
+                        txn.receiver_names = receiver_names_str
                         add_audit_log(db, txn.batch_id, "api_verified_matched")
                         db.commit()
 
-                        keyboard = get_approval_keyboard(txn.batch_id)
-                        await context.bot.send_message(
-                            chat_id=target_chat_id,
-                            reply_to_message_id=target_msg_id,
-                           text=(f"All {len(qr_data_list)} slip(s) verified successfully!\n\n"
-                                 f"Sender(s): {sender_names_str}\n"
-                                 f"Verified total: {total_api_amount}\n"
-                                 f"Reported amount: {chat_amount}\n\n"
-                                 f"Please review the information and click the ✅ Receive button to accept."),
-                            reply_markup=keyboard,
-                        )
+                        sheet_success, sheet_error_msg = append_to_sheet(txn)
+                        if sheet_success:
+                            add_audit_log(db, txn.batch_id, "sheet_saved")
+                            db.commit()
+                            logger.info(
+                                "✅ Auto-Received: Batch=%s | Receiver(s): %s | Agent: %s | Amount: %s",
+                                txn.batch_id[:15], receiver_names_str, txn.receiver_account or "-", total_api_amount
+                            )
+                            await context.bot.send_message(
+                                chat_id=target_chat_id,
+                                reply_to_message_id=target_msg_id,
+                                text=(f"✅ Auto-Received: all {len(qr_data_list)} slip(s) matched the API verification.\n\n"
+                                      f"Sender(s): {sender_names_str}\n"
+                                      f"Receiver: {receiver_names_str}\n"
+                                      f"Agent: {txn.receiver_account or '-'}\n"
+                                      f"Verified total: {total_api_amount}\n"
+                                      f"Reported amount: {chat_amount}"),
+                            )
+                        else:
+                            await context.bot.send_message(
+                                chat_id=target_chat_id,
+                                reply_to_message_id=target_msg_id,
+                                text=(f"⚠️ Auto-receive was prepared, but saving to Google Sheets failed.\n\n"
+                                      f"{sheet_error_msg}"),
+                            )
                     else:
                         txn.status = "Reject"
                         add_audit_log(db, txn.batch_id, "auto_rejected_mismatch")
-                        db.commit()
+                        remove_transaction_and_qr_links(db, txn.batch_id)
                         
                         reject_reason = ""
                         if chat_amount != total_api_amount:

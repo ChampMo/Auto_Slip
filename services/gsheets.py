@@ -2,19 +2,30 @@ from datetime import datetime
 import logging
 from typing import Tuple, Any, Dict
 from wsgiref import headers
+from zoneinfo import ZoneInfo
 
 from core.config import config
 from google.oauth2.service_account import Credentials
 import gspread
 from services.gdrive import drive_service
-from services.easyslip import ACCOUNT_MAPPING
+from services.easyslip import ACCOUNT_MAPPING, BANK_DROPDOWN_VALUES
 
 logger = logging.getLogger(__name__)
+
+BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+
+def get_bangkok_now() -> datetime:
+    return datetime.now(BANGKOK_TZ)
+
+
+def get_sheet_name_for_datetime(dt: datetime) -> str:
+    return dt.astimezone(BANGKOK_TZ).strftime("%d-%m-%Y")
 
 
 class GoogleSheetsService:
@@ -42,7 +53,7 @@ class GoogleSheetsService:
 
     def _get_dynamic_spreadsheet(self) -> gspread.Spreadsheet:
         """ค้นหาและ Caching ไฟล์ Spreadsheet ประจำเดือนผ่าน Drive"""
-        now = datetime.now()
+        now = get_bangkok_now()
         file_name = f"Slips_{now.strftime('%m-%Y')}"
 
         if (
@@ -74,10 +85,10 @@ class GoogleSheetsService:
         except (ValueError, TypeError):
             return 0.0
 
-    AGENT_ACCOUNT_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
+    AGENT_ACCOUNT_DROPDOWN_VALUES = BANK_DROPDOWN_VALUES
 
     SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
-    SUMMARY_BANK_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
+    SUMMARY_BANK_DROPDOWN_VALUES = BANK_DROPDOWN_VALUES
 
     def _apply_main_table_style(self, worksheet: gspread.Worksheet):
         """จัดรูปแบบตารางหลัก A:AJ"""
@@ -528,8 +539,8 @@ class GoogleSheetsService:
             ["TTB-Yo", "=SUMIF(D:D,AP12,B:B)", "=SUMIF(H:H,AP12,F:F)", "=SUMIF(K:K,AP12,I:I)", "=SUM(AQ12:AS12)"],
             ["SCB-Yo", "=SUMIF(D:D,AP13,B:B)", "=SUMIF(H:H,AP13,F:F)", "=SUMIF(K:K,AP13,I:I)", "=SUM(AQ13:AS13)"],
             ["GSB-Yo", "=SUMIF(D:D,AP14,B:B)", "=SUMIF(H:H,AP14,F:F)", "=SUMIF(K:K,AP14,I:I)", "=SUM(AQ14:AS14)"],
-            ["KB-CKทรรศนะ", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
-            ["KB-CPทรรศนะ", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
+            ["KB-CKBกระแส", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
+            ["KB-CPกระแส", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
             ["KKP-LS", "=SUMIF(D:D,AP17,B:B)", "=SUMIF(H:H,AP17,F:F)", "=SUMIF(K:K,AP17,I:I)", "=SUM(AQ17:AS17)"],
             ["", "=SUMIF(D:D,AP18,B:B)", "=SUMIF(H:H,AP18,F:F)", "=SUMIF(K:K,AP18,I:I)", "=SUM(AQ18:AS18)"],
             ["ถอนเงินออกทั้งหมด", "=SUM(AQ3:AQ18)", "=SUM(AR3:AR18)", "=SUM(AS3:AS18)", "=SUM(AT3:AT18)"],
@@ -589,7 +600,16 @@ class GoogleSheetsService:
     def create_today_sheet(self):
         """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี"""
         spreadsheet = self._get_dynamic_spreadsheet()
-        sheet_name = datetime.now().strftime("%d-%m-%Y")
+        bangkok_now = get_bangkok_now()
+        sheet_name = get_sheet_name_for_datetime(bangkok_now)
+
+        logger.info(
+            "🕒 Server now=%s | Bangkok now=%s | Creating sheet=%s",
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z"),
+            bangkok_now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            sheet_name,
+        )
+        logger.info("💾 Bank dropdown values: %s", BANK_DROPDOWN_VALUES)
 
         # ถ้ามีชีทแล้ว ไม่ต้องสร้าง
         try:
@@ -600,6 +620,7 @@ class GoogleSheetsService:
             pass
 
         logger.info(f"📄 กำลังสร้างชีทสำหรับวันที่ {sheet_name}...")
+        logger.info("📋 Bank dropdown values to be used: %s", BANK_DROPDOWN_VALUES)
 
         worksheet = spreadsheet.add_worksheet(
             title=sheet_name,
@@ -613,30 +634,17 @@ class GoogleSheetsService:
             "Uwin ออก", "บัญชี", "Bank",
             "Trans ID", "VIP WE รับ", "Time", "บัญชี",
             "Trans ID", "VIP 12 รับ P", "Time", "บัญชี",
-
-            "KB-CP",
-            "KB-CPกระแส",
-            "BAY-CKB",
-            "KB-CKB",
-            "KB-CKBกระแส",
-            "KKP-Jak",
-            "GSB-Jak",
-            "BBL-Ploy",
-            "GSB-Ativit",
-            "KKP-LS",
-            "SCB-CP",
-            "GSB-Yo",
-            "TTB-Yo",
-            "SCB-Yo",
-            "SCB-MT",
-            "Cash ตา",
-            "Cash Bas"
         ]
+        
+        # เพิ่มค่าธนาคารจาก BANK_DROPDOWN_VALUES
+        headers.extend(BANK_DROPDOWN_VALUES)
+        logger.info("📊 Sheet headers (after bank values): %s", headers)
 
         while len(headers) < 55:
             headers.append("")
 
         worksheet.update("A1:BC1", [headers])
+        logger.info("✅ Headers updated to sheet with %d columns", len(headers))
 
         # ใส่ Style
         self._apply_main_table_style(worksheet)
@@ -695,8 +703,8 @@ class GoogleSheetsService:
         
         try:
             spreadsheet = self._get_dynamic_spreadsheet()
-            now = datetime.now()
-            sheet_name = now.strftime("%d-%m-%Y")
+            now = get_bangkok_now()
+            sheet_name = get_sheet_name_for_datetime(now)
 
             # ดึง Worksheet ประจำวัน หรือสร้างใหม่ถ้ายังไม่มี
             try:
@@ -723,7 +731,7 @@ class GoogleSheetsService:
             # แปลงยอดเงินเป็น float
             trans_amt = self._parse_float(txn.api_total_amount or txn.chat_amount)
             amt_display = trans_amt if trans_amt > 0 else "-"
-            bank_display = txn.chat_bank or "-"
+            bank_display = txn.receiver_account or txn.chat_bank or "-"
             
             # 💡 สร้าง Block ข้อมูล 4 คอลัมน์ [Trans ID, ยอดเงิน, Time, บัญชี]
             data_block = [trans_identifier, amt_display, formatted_time, bank_display]

@@ -7,10 +7,10 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 # 2. ดึงค่าจาก .env (ถ้าไม่มีจะใช้ sqlite สำรองไว้ตอนรันทดสอบในเครื่อง)
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./slip.db")
 
 # 3. สร้าง Engine (แยกเงื่อนไขเพราะ SQLite ต้องการ connect_args เพิ่มเติม)
-if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+if str(SQLALCHEMY_DATABASE_URL).startswith("sqlite"):
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
     )

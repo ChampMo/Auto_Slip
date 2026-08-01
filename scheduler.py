@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -13,34 +14,41 @@ def create_today_sheet() -> None:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 
 def start_scheduler() -> BackgroundScheduler:
     """Start the daily scheduler for automatic jobs."""
-    scheduler = BackgroundScheduler(timezone="Asia/Bangkok")
+    scheduler = BackgroundScheduler(timezone=BANGKOK_TZ)
 
     try:
-        scheduler.add_job(
-            create_today_sheet,
-            trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Bangkok"),
-            id="daily_create_today_sheet",
-            name="Create today's Google Sheet tab",
-            replace_existing=True,
-        )
+        existing_job_ids = {job.id for job in scheduler.get_jobs()}
 
-        scheduler.add_job(
-            create_today_sheet,
-            id="startup_create_today_sheet",
-            name="Create today's Google Sheet tab at startup",
-            trigger="date",
-            run_date=datetime.now(),
-            replace_existing=True,
-        )
+        if "daily_create_today_sheet" not in existing_job_ids:
+            scheduler.add_job(
+                create_today_sheet,
+                trigger=CronTrigger(hour=2, minute=3, timezone=BANGKOK_TZ),
+                id="daily_create_today_sheet",
+                name="Create today's Google Sheet tab",
+                replace_existing=True,
+            )
+
+        if "startup_create_today_sheet" not in existing_job_ids:
+            scheduler.add_job(
+                create_today_sheet,
+                id="startup_create_today_sheet",
+                name="Create today's Google Sheet tab at startup",
+                trigger="date",
+                run_date=datetime.now(BANGKOK_TZ),
+                replace_existing=True,
+            )
 
         scheduler.start()
         logger.info("Scheduler started successfully")
-        logger.info("Daily sheet creation job is scheduled for 01:00 Asia/Bangkok")
-        logger.info("Next scheduled execution: %s", scheduler.get_jobs()[0].next_run_time)
+        logger.info("Server now: %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z"))
+        logger.info("Bangkok now: %s", datetime.now(BANGKOK_TZ).strftime("%Y-%m-%d %H:%M:%S %Z"))
+        for job in scheduler.get_jobs():
+            logger.info("Job '%s' next run at: %s", job.id, job.next_run_time)
         return scheduler
     except Exception as exc:
         logger.exception("Failed to start scheduler: %s", exc)
