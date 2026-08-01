@@ -10,6 +10,7 @@ from database.crud import add_audit_log, is_sheet_saved, is_sheet_locked
 from services.gsheets import append_to_sheet
 import json
 from database.models import UsedQR
+from telegram.error import TimedOut, NetworkError
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
@@ -18,10 +19,37 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = update.message.caption or ""
     
     photo = update.message.photo[-1]
-    photo_file = await photo.get_file()
-    temp_path = f"temp_{msg_id}.jpg"
-    await photo_file.download_to_drive(temp_path)
-    
+    try:
+        photo_file = await photo.get_file(
+            read_timeout=60,
+            write_timeout=60,
+            connect_timeout=30,
+            pool_timeout=30,
+        )
+
+        temp_path = f"temp_{msg_id}.jpg"
+
+        await photo_file.download_to_drive(
+            custom_path=temp_path,
+            read_timeout=60,
+            write_timeout=60,
+            connect_timeout=30,
+            pool_timeout=30,
+        )
+
+    except TimedOut:
+        await update.message.reply_text(
+            "⚠️ การเชื่อมต่อกับ Telegram หมดเวลา กรุณาส่งรูปอีกครั้ง"
+        )
+        return
+
+    except NetworkError:
+        await update.message.reply_text(
+            "⚠️ ไม่สามารถเชื่อมต่อกับ Telegram ได้ กรุณาลองใหม่อีกครั้ง"
+        )
+        return
+
+
     qr_data_list = read_qr_code(temp_path)
     
     # 👇 เพิ่มส่วนปริ้นท์ Payload ของ QR Code ลง Terminal ตรงนี้
