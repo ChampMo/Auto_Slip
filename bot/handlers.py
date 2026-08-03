@@ -51,12 +51,12 @@ def build_bank_mismatch_reason(bank_codes: list[str], bank_matches: list[bool]) 
     mismatched_codes = [code for code, matched in zip(bank_codes, bank_matches) if code and not matched]
     if mismatched_codes:
         return (
-            f"❌ เลขธนาคารไม่ตรง: {', '.join(mismatched_codes)} "
-            f"ไม่อยู่ใน ACCOUNT_MAPPING"
+            f"❌ Bank number mismatch: {', '.join(mismatched_codes)} "
+            f"is not in ACCOUNT_MAPPING"
         )
     if bank_codes:
-        return "❌ เลขธนาคารไม่ตรง: บัญชีธนาคารที่รับมาไม่ตรงกับบัญชีของบริษัท"
-    return "❌ เลขธนาคารไม่ตรง: ไม่สามารถอ่านเลขธนาคารจากข้อมูลผู้รับได้"
+        return "❌ Bank number mismatch: the received bank account does not match the company bank account"
+    return "❌ Bank number mismatch: unable to read the receiver bank number from the payload"
 
 
 async def send_manual_review_message(
@@ -68,9 +68,9 @@ async def send_manual_review_message(
     footer_message: str,
 ):
     keyboard = get_approval_keyboard(batch_id)
-    manual_reasons = reasons or ["• ต้องตรวจสอบสลิปด้วยมือ"]
+    manual_reasons = reasons or ["• Manual slip review required"]
     alert_text = (
-        "⚠️ ต้องตรวจสอบสลิปด้วยมือ\n\n"
+        "⚠️ Manual slip review required\n\n"
         + "\n".join(manual_reasons)
         + f"\n\n{footer_message}"
     )
@@ -109,13 +109,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except TimedOut:
         await update.message.reply_text(
-            "⚠️ การเชื่อมต่อกับ Telegram หมดเวลา กรุณาส่งรูปอีกครั้ง"
+            "⚠️ Telegram connection timed out. Please send the image again."
         )
         return
 
     except NetworkError:
         await update.message.reply_text(
-            "⚠️ ไม่สามารถเชื่อมต่อกับ Telegram ได้ กรุณาลองใหม่อีกครั้ง"
+            "⚠️ Unable to connect to Telegram. Please try again."
         )
         return
 
@@ -243,18 +243,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 chat_id=target_chat_id,
                                 reply_to_message_id=target_msg_id,
                                 text=(f"✅ Auto-Received: all {len(qr_data_list)} slip(s) matched the API verification.\n\n"
-                                      f"Sender(s): {sender_names_str}\n"
-                                      f"Receiver: {receiver_names_str}\n"
-                                      f"Agent: {txn.receiver_account or '-'}\n"
-                                      f"Verified total: {total_api_amount}\n"
-                                      f"Reported amount: {chat_amount}"),
+                                    f"Sender(s): {sender_names_str}\n"
+                                    f"Agent: {txn.receiver_account or '-'}\n"
+                                    f"Verified total: {total_api_amount}\n"
+                                    f"Reported amount: {chat_amount}"),
                             )
                         else:
                             await context.bot.send_message(
                                 chat_id=target_chat_id,
                                 reply_to_message_id=target_msg_id,
                                 text=(f"⚠️ Auto-receive was prepared, but saving to Google Sheets failed.\n\n"
-                                      f"{sheet_error_msg}"),
+                                    f"{sheet_error_msg}"),
                             )
                     else:
                         txn.status = "Reject"
@@ -273,28 +272,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
                             text=(f"❌ Auto-Rejected: Information Mismatch\n\n"
-                                  f"{reject_reason if reject_reason else '❌ Unknown mismatch reason'}\n"
-                                  f"(This slip group has been automatically rejected.)"),
+                                f"{reject_reason if reject_reason else '❌ Unknown mismatch reason'}\n"
+                                f"(This slip group has been automatically rejected.)"),
                         )
-                elif verification_decision == VerificationDecision.MANUAL_REVIEW:
+                else:
                     add_audit_log(db, txn.batch_id, "manual_review_required")
                     db.commit()
 
-                    manual_reasons = []
-                    if not bank_matches:
-                        manual_reasons.append("• เลขธนาคารไม่ตรง")
-                    if not is_name_match:
-                        manual_reasons.append("• ชื่อผู้ส่งไม่ตรง")
-
-                    await send_manual_review_message(
-                        context.bot,
-                        target_chat_id,
-                        target_msg_id,
-                        txn.batch_id,
-                        manual_reasons,
-                        "กรณีเลขธนาคารไม่ตรง ให้กด Receive หรือ Reject เองเพื่อเช็ค manual",
-                    )
-                else:
                     # ใช้ manual flow เดียวกัน แต่เปลี่ยนเหตุผลเป็นกรณี API ใช้ไม่ได้
                     await send_manual_review_message(
                         context.bot,
@@ -353,8 +337,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db.commit()
                 await query.edit_message_text(
                     text=(f"✅ Manual Receive Completed\n"
-                          f"Selected Bank: {bank_value}\n\n"
-                          f"Saved to Google Sheets."),
+                        f"Selected Bank: {bank_value}\n\n"
+                        f"Saved to Google Sheets."),
                     reply_markup=None,
                 )
             else:
