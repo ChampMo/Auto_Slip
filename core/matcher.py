@@ -16,7 +16,7 @@ GROUP_CONFIG = {
 def extract_data_from_caption(caption: str, is_user_group: bool):
     data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None}
     
-    amount_match = re.search(r'(?i)AMOUNT\s*(?:[:]\s*THB|THB\s*[:])\s*([0-9,.]+)', caption)
+    amount_match = re.search(r'(?i)AMOUNT\s*(?:[:=]\s*)?(?:THB\s*(?:[:=]\s*)?)?([0-9,.]+)', caption)
     if amount_match: data["amount"] = float(amount_match.group(1).replace(',', ''))
 
     if is_user_group:

@@ -12,7 +12,12 @@ def determine_verification_action(
     amount_matches: bool,
     name_matches: bool,
     bank_matches: bool,
+    multi_slip_batch: bool = False,
 ) -> VerificationDecision:
+    # Multi-slip batches always require manual review
+    if multi_slip_batch:
+        return VerificationDecision.MANUAL_REVIEW
+    
     if not api_success:
         return VerificationDecision.MANUAL_REVIEW
     if not bank_matches:

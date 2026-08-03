@@ -1,5 +1,6 @@
 import requests
 import re
+import logging
 from core.config import config
 
 ACCOUNT_MAPPING = {
@@ -24,6 +25,52 @@ ACCOUNT_MAPPING = {
 }
 
 BANK_DROPDOWN_VALUES = sorted(set(ACCOUNT_MAPPING.values()))
+
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_emv_tlv(payload: str) -> dict[str, str]:
+    """Parse a simple EMV-style TLV payload into a flat tag/value map."""
+    parsed: dict[str, str] = {}
+    if not payload:
+        return parsed
+
+    index = 0
+    payload_length = len(payload)
+    while index + 4 <= payload_length:
+        tag = payload[index:index + 2]
+        length_text = payload[index + 2:index + 4]
+
+        if not tag.isdigit() or not length_text.isdigit():
+            break
+
+        value_length = int(length_text)
+        start = index + 4
+        end = start + value_length
+        if end > payload_length:
+            break
+
+        parsed[tag] = payload[start:end]
+        index = end
+
+    return parsed
+
+
+def extract_amount_from_qr_payload(qr_payload: str) -> float | None:
+    """Try to read the transfer amount directly from the QR payload."""
+    if not qr_payload:
+        return None
+
+    tags = _parse_emv_tlv(qr_payload)
+    amount_text = (tags.get("54") or "").strip()
+    if not amount_text:
+        return None
+
+    try:
+        return float(amount_text.replace(",", ""))
+    except (TypeError, ValueError):
+        return None
 
 
 def extract_bank_code_from_receiver_account(recv_acc: dict) -> str:
@@ -61,6 +108,13 @@ def verify_slip(qr_payload: str) -> dict:
     try:
         response = requests.get(url, headers=headers, params=params)
         result = response.json()
+        payload_amount = extract_amount_from_qr_payload(qr_payload)
+        logger.info(
+            "EasySlip verify response | payload_amount=%s | status=%s | message=%s",
+            payload_amount,
+            result.get("status"),
+            result.get("message", ""),
+        )
         
         # เช็ค status จาก API ว่าเท่ากับ 200 หรือไม่ (ตาม Document)
         if result.get("status") == 200:
@@ -104,6 +158,7 @@ def verify_slip(qr_payload: str) -> dict:
             return {
                 "success": True,
                 "amount": float(amount),
+                "payload_amount": payload_amount,
                 "sender": sender,
                 "receiver": receiver_info,  # 👈 ส่งค่าที่ดึงได้กลับไปด้วย
                 "receiver_bank_code": receiver_bank_code,
@@ -134,12 +189,15 @@ def verify_slip(qr_payload: str) -> dict:
             return {
                 "success": False,
                 "error": error_type,
-                "user_message": user_friendly_msg
+                "user_message": user_friendly_msg,
+                "payload_amount": payload_amount,
             }
             
     except Exception as e:
+        logger.exception("EasySlip verify exception | payload_amount=%s", extract_amount_from_qr_payload(qr_payload))
         return {
             "success": False,
             "error": "EXCEPTION",
-            "user_message": f"Network or server error during slip verification: {str(e)}"
+            "user_message": f"Network or server error during slip verification: {str(e)}",
+            "payload_amount": extract_amount_from_qr_payload(qr_payload),
         }

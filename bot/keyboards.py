@@ -9,7 +9,8 @@ def get_approval_keyboard(batch_id: str):
     keyboard = [
         [
             InlineKeyboardButton("❌ Reject", callback_data=f"reject_{short_ref}"),
-            InlineKeyboardButton("✅ Receive", callback_data=f"receive_{short_ref}")
+            InlineKeyboardButton("✅ Receive", callback_data=f"receive_{short_ref}"),
+            InlineKeyboardButton("🧑 Agent", callback_data=f"agent_{short_ref}")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

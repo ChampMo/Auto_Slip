@@ -8,11 +8,11 @@ from bot.keyboards import get_approval_keyboard, get_bank_selection_keyboard
 from bot.verification_flow import VerificationDecision, determine_verification_action
 from database.session import SessionLocal
 from core.matcher import process_incoming_slip
-from services.easyslip import verify_slip
+from services.easyslip import verify_slip, extract_amount_from_qr_payload
 from database.crud import add_audit_log, is_sheet_saved, is_sheet_locked, remove_transaction_and_qr_links
 from services.gsheets import append_to_sheet
 import json
-from database.models import UsedQR
+from database.models import Transaction, UsedQR
 from telegram.error import TimedOut, NetworkError
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,51 @@ def build_bank_mismatch_reason(bank_codes: list[str], bank_matches: list[bool]) 
     if bank_codes:
         return "❌ Bank number mismatch: the received bank account does not match the company bank account"
     return "❌ Bank number mismatch: unable to read the receiver bank number from the payload"
+
+
+def amounts_match(expected_amount: float | None, actual_amount: float | None) -> bool:
+    if expected_amount is None or actual_amount is None:
+        return False
+    return round(float(expected_amount), 2) == round(float(actual_amount), 2)
+
+
+def format_amount(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{float(value):.2f}"
+
+
+def summarize_qr_payload(qr_payload: str, keep: int = 18) -> str:
+    cleaned = (qr_payload or "").strip()
+    if len(cleaned) <= keep * 2:
+        return cleaned
+    return f"{cleaned[:keep]}...{cleaned[-keep:]}"
+
+
+def resolve_expected_amount(txn) -> float | None:
+    if txn.chat_amount is not None:
+        return txn.chat_amount
+
+    for caption in [txn.raw_user_caption or "", txn.raw_trans_caption or ""]:
+        match = re.search(r'(?i)AMOUNT\s*(?:[:=]\s*)?(?:THB\s*(?:[:=]\s*)?)?([0-9,.]+)', caption)
+        if match:
+            try:
+                return float(match.group(1).replace(",", ""))
+            except ValueError:
+                continue
+
+    return None
+
+
+def sum_batch_amount(amounts: list[float | None]) -> tuple[float, bool]:
+    total = 0.0
+    missing = False
+    for amount in amounts:
+        if amount is None:
+            missing = True
+            continue
+        total += float(amount)
+    return total, missing
 
 
 async def send_manual_review_message(
@@ -124,10 +169,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 👇 เพิ่มส่วนปริ้นท์ Payload ของ QR Code ลง Terminal ตรงนี้
     if qr_data_list:
+        logger.info("Photo scan result | chat_id=%s | msg_id=%s | qr_count=%s", chat_id, msg_id, len(qr_data_list))
         print(f"📸 [DEBUG] Detected {len(qr_data_list)} QR code(s):")
         for idx, qr in enumerate(qr_data_list, 1):
+            payload_amount = extract_amount_from_qr_payload(qr)
+            logger.info(
+                "QR payload summary | chat_id=%s | msg_id=%s | index=%s | amount=%s | payload=%s",
+                chat_id,
+                msg_id,
+                idx,
+                format_amount(payload_amount),
+                summarize_qr_payload(qr),
+            )
             print(f"   QR Code {idx} -> Payload: {qr}")
     else:
+        logger.info("Photo scan result | chat_id=%s | msg_id=%s | qr_count=0", chat_id, msg_id)
         print("📸 [DEBUG] No QR code detected in this image")
     # 👆 ----------------------------------------------------
     
@@ -152,6 +208,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # ตัวแปรสำหรับรวมข้อมูล
                 total_api_amount = 0.0
+                payload_amounts: list[float | None] = []
                 all_senders = []
                 all_receivers = []
                 all_bank_codes = []
@@ -162,8 +219,26 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # 🔄 ยิง API ตรวจสอบทีละใบและบวกยอดรวมกัน
                 for qr in qr_data_list:
+                    logger.info(
+                        "Start verifying QR | batch_id=%s | payload=%s | payload_amount=%s",
+                        txn.batch_id,
+                        summarize_qr_payload(qr),
+                        format_amount(extract_amount_from_qr_payload(qr)),
+                    )
                     api_result = verify_slip(qr)
+                    qr_amount = api_result.get("amount") if api_result.get("success") else api_result.get("payload_amount")
+                    payload_amounts.append(qr_amount)
+
                     if api_result["success"]:
+                        logger.info(
+                            "Verify success | batch_id=%s | amount=%s | sender=%s | receiver=%s | bank_code=%s | bank_matches=%s",
+                            txn.batch_id,
+                            format_amount(api_result.get("amount")),
+                            api_result.get("sender", ""),
+                            api_result.get("receiver", ""),
+                            api_result.get("receiver_bank_code", ""),
+                            api_result.get("receiver_bank_matches", False),
+                        )
                         total_api_amount += api_result["amount"]
                         all_senders.append(api_result["sender"])
                         all_receivers.append(api_result["receiver"])
@@ -175,20 +250,42 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             used_qr.api_raw_data = json.dumps(api_result["raw_data"], ensure_ascii=False)
                         
                     else:
+                        logger.warning(
+                            "Verify failed | batch_id=%s | error=%s | user_message=%s | payload_amount=%s",
+                            txn.batch_id,
+                            api_result.get("error", "UNKNOWN_ERROR"),
+                            api_result.get("user_message", ""),
+                            format_amount(api_result.get("payload_amount")),
+                        )
                         api_success = False
                         error_msg = api_result.get("error", "UNKNOWN_ERROR")
                         # ดึงข้อความแจ้งเตือนภาษาไทยที่ส่งมาจาก verify_slip
                         user_error_msg = api_result.get("user_message", f"⚠️ Slip verification system error ({error_msg})")
-                        break # ถ้าพังใบเดียว ให้ถือว่าล่มทั้งก้อนเลย
+                        continue
                 
+                verified_total_amount, payload_amount_missing = sum_batch_amount(payload_amounts)
+                logger.info(
+                    "Batch verification summary | batch_id=%s | api_success=%s | payload_missing=%s | api_total=%s | batch_total=%s | expected_amount=%s",
+                    txn.batch_id,
+                    api_success,
+                    payload_amount_missing,
+                    format_amount(total_api_amount),
+                    format_amount(verified_total_amount),
+                    format_amount(resolve_expected_amount(txn)),
+                )
+
+                multi_slip_batch = len(qr_data_list) > 1
+                expected_amount = resolve_expected_amount(txn)
+                amount_match = amounts_match(expected_amount, verified_total_amount)
+
                 if api_success:
-                    chat_amount = txn.chat_amount
+                    chat_amount = expected_amount
                     sender_names_str = ", ".join(all_senders) 
                     receiver_names_str = ", ".join(all_receivers)
                     chat_name = txn.chat_fullname or ""
                     
                     # บันทึกยอดรวมและชื่อรวมลง DB
-                    txn.api_total_amount = total_api_amount
+                    txn.api_total_amount = verified_total_amount
                     txn.sender_names = sender_names_str
                     txn.receiver_names = receiver_names_str
                     txn.receiver_account = receiver_names_str  # ♻️ ใช้ค่า mapped เต็มแทน chat_bank
@@ -213,19 +310,46 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         normalized_reported_name,
                         is_name_match,
                         bank_matches,
-                        chat_amount == total_api_amount,
+                        amount_match,
                     )
                     
+                    # Multi-slip batch: Always require manual review (never auto-receive/reject)
+                    if multi_slip_batch:
+                        txn.api_total_amount = verified_total_amount
+                        txn.sender_names = sender_names_str
+                        txn.receiver_names = receiver_names_str
+                        add_audit_log(db, txn.batch_id, "manual_review_required_multi_slip")
+                        db.commit()
+
+                        await send_manual_review_message(
+                            context.bot,
+                            target_chat_id,
+                            target_msg_id,
+                            txn.batch_id,
+                            [
+                                f"• Multi-slip batch detected ({len(qr_data_list)} slips)",
+                                f"• Verified total: {format_amount(verified_total_amount)}",
+                                f"• Reported amount: {format_amount(chat_amount)}",
+                                f"• Amount match: {'YES' if amount_match else 'NO'}",
+                                f"• Sender(s): {sender_names_str or '-'}",
+                                f"• Receiver(s): {receiver_names_str or '-'}",
+                            ],
+                            "Please choose Receive, Reject, or Agent to continue with sheet entry.",
+                        )
+                        return
+
+                    # Single-slip: Use decision logic for auto-receive/reject
                     verification_decision = determine_verification_action(
                         api_success=True,
-                        amount_matches=(chat_amount == total_api_amount),
+                        amount_matches=amount_match,
                         name_matches=is_name_match,
                         bank_matches=bank_matches,
+                        multi_slip_batch=False,
                     )
 
                     if verification_decision == VerificationDecision.AUTO_RECEIVE:
                         txn.status = "Receive"
-                        txn.api_total_amount = total_api_amount
+                        txn.api_total_amount = verified_total_amount
                         txn.sender_names = sender_names_str
                         txn.receiver_names = receiver_names_str
                         add_audit_log(db, txn.batch_id, "api_verified_matched")
@@ -237,16 +361,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             db.commit()
                             logger.info(
                                 "✅ Auto-Received: Batch=%s | Receiver(s): %s | Agent: %s | Amount: %s",
-                                txn.batch_id[:15], receiver_names_str, txn.receiver_account or "-", total_api_amount
+                                txn.batch_id[:15], receiver_names_str, txn.receiver_account or "-", verified_total_amount
                             )
                             await context.bot.send_message(
                                 chat_id=target_chat_id,
                                 reply_to_message_id=target_msg_id,
-                                text=(f"✅ Auto-Received: all {len(qr_data_list)} slip(s) matched the API verification.\n\n"
-                                    f"Sender(s): {sender_names_str}\n"
+                                text=(f"✅ Auto-Received: all slip matched the API verification.\n\n"
+                                    f"Sender: {sender_names_str}\n"
                                     f"Agent: {txn.receiver_account or '-'}\n"
-                                    f"Verified total: {total_api_amount}\n"
-                                    f"Reported amount: {chat_amount}"),
+                                    f"Amount: {format_amount(verified_total_amount)}"),
                             )
                         else:
                             await context.bot.send_message(
@@ -255,7 +378,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 text=(f"⚠️ Auto-receive was prepared, but saving to Google Sheets failed.\n\n"
                                     f"{sheet_error_msg}"),
                             )
-                    else:
+                    elif verification_decision == VerificationDecision.AUTO_REJECT:
                         txn.status = "Reject"
                         add_audit_log(db, txn.batch_id, "auto_rejected_mismatch")
                         remove_transaction_and_qr_links(db, txn.batch_id)
@@ -263,8 +386,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reject_reason = ""
                         if not bank_matches:
                             reject_reason += build_bank_mismatch_reason(all_bank_codes, all_bank_matches) + "\n"
-                        if chat_amount != total_api_amount:
-                            reject_reason += f"❌ Amount: Slip `{total_api_amount}` | Reported `{chat_amount}`\n"
+                        if not amounts_match(chat_amount, verified_total_amount):
+                            reject_reason += f"❌ Amount: Slip `{format_amount(verified_total_amount)}` | Reported `{format_amount(chat_amount)}`\n"
                         if not is_name_match:
                             reject_reason += f"❌ Sender Name format mismatch: Slip `{sender_names_str}` | Reported `{chat_name}`\n"
                             
@@ -275,30 +398,65 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"{reject_reason if reject_reason else '❌ Unknown mismatch reason'}\n"
                                 f"(This slip group has been automatically rejected.)"),
                         )
+                    else:
+                        txn.api_total_amount = verified_total_amount
+                        txn.sender_names = sender_names_str
+                        txn.receiver_names = receiver_names_str
+                        add_audit_log(db, txn.batch_id, "manual_review_required")
+                        db.commit()
+
+                        await send_manual_review_message(
+                            context.bot,
+                            target_chat_id,
+                            target_msg_id,
+                            txn.batch_id,
+                            [
+                                f"• Verified amount: {format_amount(verified_total_amount)}",
+                                f"• Reported amount: {format_amount(chat_amount)}",
+                                f"• Amount match: {'YES' if amount_match else 'NO'}",
+                                f"• Sender: {sender_names_str or '-'}",
+                            ],
+                            "Please choose Receive, Reject, or Agent to continue with sheet entry.",
+                        )
+                        return
                 else:
-                    add_audit_log(db, txn.batch_id, "manual_review_required")
+                    chat_amount = expected_amount
+                    txn.api_total_amount = verified_total_amount
+                    txn.sender_names = ""
+                    txn.receiver_names = ""
+                    txn.receiver_account = txn.receiver_account or "-"
+                    add_audit_log(db, txn.batch_id, "manual_review_required_multi_slip")
                     db.commit()
 
-                    # ใช้ manual flow เดียวกัน แต่เปลี่ยนเหตุผลเป็นกรณี API ใช้ไม่ได้
+                    logger.info(
+                        "Multi-slip batch requires manual review | batch_id=%s | verified_total=%s | expected_amount=%s | amount_match=%s | qr_count=%s",
+                        txn.batch_id,
+                        format_amount(verified_total_amount),
+                        format_amount(expected_amount),
+                        amount_match,
+                        len(qr_data_list),
+                    )
+
                     await send_manual_review_message(
                         context.bot,
                         target_chat_id,
                         target_msg_id,
                         txn.batch_id,
-                        [f"• {user_error_msg}"],
-                        "Please perform a manual review of all slips and click one of the buttons below to proceed.",
+                        [
+                            f"• Multi-slip batch detected ({len(qr_data_list)} slips)",
+                            f"• Verified total: {format_amount(verified_total_amount)}",
+                            f"• Reported amount: {format_amount(chat_amount)}",
+                            f"• Amount match: {'YES' if amount_match else 'NO'}",
+                        ],
+                        "Please choose Receive, Reject, or Agent to continue with sheet entry.",
                     )
-                    
-    if os.path.exists(temp_path):
-        os.remove(temp_path)
-
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    callback_data = query.data or ""
+    if not query:
+        return
 
-    from database.models import Transaction
-    from database.session import SessionLocal
-    from database.crud import add_audit_log
+    callback_data = query.data or ""
+    await query.answer()
 
     with SessionLocal() as db:
         if callback_data.startswith("bank_"):
@@ -306,6 +464,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             txn = db.query(Transaction).filter(Transaction.batch_id.startswith(short_ref)).first()
             if not txn:
                 await query.answer("Record not found.", show_alert=True)
+                await query.edit_message_text(text="Error: This record was not found in the system.")
                 return
 
             txn.chat_bank = bank_value
@@ -313,7 +472,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             txn.status = "Receive"
             add_audit_log(db, txn.batch_id, "manual_bank_selected")
 
-            # หากกำลังถูกบันทึกหรือบันทึกแล้ว ให้แจ้งผู้ใช้และไม่ดำเนินการ
             if is_sheet_locked(db, txn.batch_id):
                 await query.answer("This slip is already being saved or has been saved.", show_alert=True)
                 await query.edit_message_text(
@@ -322,7 +480,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # สร้าง lock ว่าเริ่มการบันทึกแล้ว และแก้ไขข้อความให้หายปุ่ม (แสดงสถานะ Saving)
             add_audit_log(db, txn.batch_id, "saving_started")
             await query.answer("Saving manual bank selection to Google Sheets...")
             await query.edit_message_text(
@@ -332,7 +489,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             sheet_success, sheet_error_msg = append_to_sheet(txn)
             if sheet_success:
-                # บันทึก marker ว่าได้บันทึกลง sheet แล้ว
                 add_audit_log(db, txn.batch_id, "sheet_saved")
                 db.commit()
                 await query.edit_message_text(
@@ -370,7 +526,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            if action == "receive":
+            if action in ["receive", "agent"]:
                 txn.status = "Receive"
                 action_text = "✅ Receive"
                 await query.answer("Please select a bank/account value before saving...")
@@ -383,19 +539,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 txn.status = "Reject"
                 action_text = "❌ Reject"
 
-            # ตอบ Telegram ทันที ก่อนทำงานที่ใช้เวลานาน
             await query.answer("Saving data to Google Sheets...")
 
-            # หากกำลังถูกบันทึกหรือบันทึกแล้ว ให้แจ้งผู้ใช้และไม่ดำเนินการ
             if is_sheet_locked(db, txn.batch_id):
                 await query.answer("Slip already saved or in-progress!", show_alert=True)
                 await query.edit_message_text(
-                    text=(f"Slip already saved or in-progress!"),
+                    text=("Slip already saved or in-progress!"),
                     reply_markup=None,
                 )
                 return
 
-            # สร้าง lock ว่าเริ่มการบันทึกแล้ว และลบปุ่มออกเพื่อป้องกันการกดซ้ำ
             add_audit_log(db, txn.batch_id, "saving_started")
             await query.edit_message_text(
                 text="Saving to Google Sheets...",
@@ -405,7 +558,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sheet_success, sheet_error_msg = append_to_sheet(txn)
 
             if sheet_success:
-                # บันทึก marker ว่าได้บันทึกลง sheet แล้ว
                 add_audit_log(db, txn.batch_id, "sheet_saved")
                 db.commit()
                 add_audit_log(db, txn.batch_id, f"admin_clicked_{action}")
@@ -430,6 +582,4 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             await query.answer("Record not found.", show_alert=True)
-            await query.edit_message_text(
-                text=("Error: This record was not found in the system."),
-            )
+            await query.edit_message_text(text="Error: This record was not found in the system.")
