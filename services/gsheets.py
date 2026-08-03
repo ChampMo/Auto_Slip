@@ -1,14 +1,14 @@
 from datetime import datetime
 import logging
 from typing import Tuple, Any, Dict
-from wsgiref import headers
 from zoneinfo import ZoneInfo
 
 from core.config import config
+from core.names import get_first_names
 from google.oauth2.service_account import Credentials
 import gspread
 from services.gdrive import drive_service
-from services.easyslip import ACCOUNT_MAPPING, BANK_DROPDOWN_VALUES
+from services.easyslip import BANK_DROPDOWN_VALUES
 
 logger = logging.getLogger(__name__)
 
@@ -574,7 +574,6 @@ class GoogleSheetsService:
                 summary.append([name, data["count"], data["total"]])
 
         summary = [row + [""] * (3 - len(row)) for row in summary]
-        end_row = len(summary)
         max_rows = max(len(summary), len(bank_table), len(deposit_table))
 
         while len(summary) < max_rows:
@@ -719,13 +718,12 @@ class GoogleSheetsService:
             if formatted_time.startswith("0"):
                 formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
 
-            # ดึงข้อมูล Trans ID
+            # Trans ID: caption -> ชื่อผู้ส่งจากสลิป -> ชื่อผู้ส่งที่แจ้งมาในแชท (กรณีอ่านสลิปไม่ออก)
             trans_identifier = (
                 txn.chat_trans_id
-                or txn.chat_user_id
-                or txn.sender_names
-                or txn.chat_fullname
-                or "-"
+                or get_first_names(txn.sender_names)
+                or get_first_names(txn.chat_fullname)
+                or ""
             )
             
             # แปลงยอดเงินเป็น float

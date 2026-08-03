@@ -7,29 +7,28 @@ class Transaction(Base):
 
     # เปลี่ยน Primary Key เป็น batch_id (รหัสกลุ่มของสลิปในรูปนั้นๆ)
     batch_id = Column(String(100), primary_key=True, index=True)
-    category = Column(String(50))
-    
-    g_user_chat_id = Column(String(50), nullable=True)
-    g_user_msg_id = Column(String(50), nullable=True)
-    raw_user_caption = Column(String(500), nullable=True) 
-    chat_user_id = Column(String(50), nullable=True)     
-    
-    g_trans_chat_id = Column(String(50), nullable=True)
-    g_trans_msg_id = Column(String(50), nullable=True)
-    raw_trans_caption = Column(String(500), nullable=True) 
-    chat_trans_id = Column(String(50), nullable=True)      
-    chat_fullname = Column(String(100), nullable=True)     
-    
+    category = Column(String(50))  # VIP_WE หรือ VIP_12
+
+    # --- ข้อความที่กลุ่มส่งมา (1 กลุ่มส่งครั้งเดียว) ---
+    chat_id = Column(String(50), nullable=True)
+    msg_id = Column(String(50), nullable=True)
+    raw_caption = Column(String(500), nullable=True)
+
+    chat_user_id = Column(String(50), nullable=True)   # format แบบ "User : benz4455"
+    chat_trans_id = Column(String(50), nullable=True)  # format แบบ "TRANS ID : 0000004"
+    chat_fullname = Column(String(100), nullable=True) # format แบบ "FULL NAME : ..."
+
     chat_bank = Column(String(50), nullable=True)
-    chat_amount = Column(Float, nullable=True) 
-    
+    chat_amount = Column(Float, nullable=True)
+
     status = Column(String(20), default="pending")
-    
+
     # --- ข้อมูลจาก API (เปลี่ยนเป็นแบบรวมยอด) ---
     api_total_amount = Column(Float, nullable=True) # ยอดรวมทุกใบ
     sender_names = Column(String(300), nullable=True) # ชื่อคนโอนทุกคนรวมกัน
+    receiver_names = Column(String(300), nullable=True) # ชื่อ/บัญชีผู้รับทุกใบรวมกัน
     receiver_account = Column(String(255), nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 # ตารางใหม่: ใช้เช็คสลิปซ้ำแยกเป็นรายใบ

@@ -1,134 +1,134 @@
 import re
 import hashlib
 from sqlalchemy.orm import Session
+
+from core.config import config
 from database.models import Transaction, UsedQR
-from database.crud import get_transaction, add_audit_log
+from database.crud import add_audit_log, SHEET_REOPEN_ACTION
 
 
-GROUP_CONFIG = {
-    "-1004418034373": {"category": "VIP_WE", "is_user": True},   # กลุ่ม User ของ Category A
-    "-1003573441688": {"category": "VIP_WE", "is_user": False},  # กลุ่ม Trans ของ Category A
-    "-5153291438": {"category": "VIP_12", "is_user": True},   # กลุ่ม User ของ Category B
-    "-5356341183": {"category": "VIP_12", "is_user": False},  # กลุ่ม Trans ของ Category B
+# 1 กลุ่ม = 1 category และแต่ละกลุ่มจะส่งสลิปใบหนึ่งมาเพียงรอบเดียว
+GROUP_CATEGORY = {
+    str(config.VIP_WE_CHAT_ID): "VIP_WE",
+    str(config.VIP_12_CHAT_ID): "VIP_12",
 }
 
+REJECTED_STATUSES = {"reject", "rejected"}
 
-def extract_data_from_caption(caption: str, is_user_group: bool):
+# รองรับได้ทั้ง "Amount : THB 400" และ "AMOUNT THB : 2500.00"
+AMOUNT_PATTERN = re.compile(r'(?i)AMOUNT\s*(?:[:=]\s*)?(?:THB\s*(?:[:=]\s*)?)?([0-9,.]+)')
+# ชื่อผู้ใช้เป็นตัวอักษรผสมตัวเลขได้ เช่น "User :  benz4455"
+USER_PATTERN = re.compile(r'(?i)\bUser\s*(?:ID)?\s*[:=]\s*(\S+)')
+TRANS_ID_PATTERN = re.compile(r'(?i)\bTRANS\s*ID\s*[:=]\s*(\S+)')
+FULLNAME_PATTERN = re.compile(r'(?i)\bFULL\s*NAME\s*[:=]\s*([^\n]+)')
+
+
+def extract_data_from_caption(caption: str) -> dict:
+    """ดึงข้อมูลจาก caption โดยรองรับทุก format ที่กลุ่มอาจส่งมา (มีฟิลด์ไหนก็เก็บฟิลด์นั้น)"""
     data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None}
-    
-    amount_match = re.search(r'(?i)AMOUNT\s*(?:[:=]\s*)?(?:THB\s*(?:[:=]\s*)?)?([0-9,.]+)', caption)
-    if amount_match: data["amount"] = float(amount_match.group(1).replace(',', ''))
+    caption = caption or ""
 
-    if is_user_group:
-        user_match = re.search(r'(?i)User\s*:\s*(\d+)', caption)
-        if user_match: data["user_id"] = user_match.group(1)
-    else:
-        trans_match = re.search(r'(?i)TRANS\s*ID\s*:\s*(\w+)', caption)
-        if trans_match: data["trans_id"] = trans_match.group(1)
-        name_match = re.search(r'(?is)FULL\s*NAME\s*:\s*(.+?)(?=(?:AMOUNT|$))', caption)
-        if name_match: data["fullname"] = name_match.group(1).strip()
-        
+    amount_match = AMOUNT_PATTERN.search(caption)
+    if amount_match:
+        try:
+            data["amount"] = float(amount_match.group(1).replace(',', ''))
+        except ValueError:
+            pass
+
+    user_match = USER_PATTERN.search(caption)
+    if user_match:
+        data["user_id"] = user_match.group(1)
+
+    trans_match = TRANS_ID_PATTERN.search(caption)
+    if trans_match:
+        data["trans_id"] = trans_match.group(1)
+
+    name_match = FULLNAME_PATTERN.search(caption)
+    if name_match:
+        data["fullname"] = name_match.group(1).strip()
+
     return data
+
 
 def generate_batch_id(qr_list: list):
     """นำรหัส QR ทุกใบในรูปมาเรียงต่อกันแล้วเข้ารหัสเป็น ID กลุ่ม"""
     combined = "".join(sorted(qr_list))
     return hashlib.md5(combined.encode('utf-8')).hexdigest()
 
+
+def generate_no_qr_batch_id(chat_id: str, msg_id: str):
+    """รูปที่อ่าน QR ไม่ออก ไม่มีรหัสสลิปให้ใช้ จึงอ้างอิงจากข้อความที่ส่งมาแทน"""
+    return hashlib.md5(f"no_qr:{chat_id}:{msg_id}".encode('utf-8')).hexdigest()
+
+
+def _is_batch_rejected(db: Session, batch_id: str) -> bool:
+    """batch ที่โดน Reject ไปแล้ว ให้ถือว่าปลดล็อค เอาสลิปมาส่งใหม่ได้"""
+    txn = db.query(Transaction).filter(Transaction.batch_id == batch_id).first()
+    if not txn:
+        return True
+    return str(txn.status).lower() in REJECTED_STATUSES
+
+
+def _fill_transaction(txn: Transaction, chat_id: str, msg_id: str, caption: str, extracted: dict):
+    txn.chat_id = chat_id
+    txn.msg_id = str(msg_id)
+    txn.raw_caption = caption
+    txn.chat_user_id = extracted["user_id"]
+    txn.chat_trans_id = extracted["trans_id"]
+    txn.chat_fullname = extracted["fullname"]
+    txn.chat_amount = extracted["amount"]
+
+
 def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str, caption: str):
+    """เช็คสลิปซ้ำแล้วบันทึกรายการใหม่
+
+    คืนค่าเป็น (status, txn) โดย status คือ
+      - "unknown_group": ไม่ใช่กลุ่มที่ลงทะเบียนไว้ ให้ข้ามไป
+      - "duplicate": สลิปใบนี้เคยถูกใช้ไปแล้ว
+      - "new": รับเข้าระบบแล้ว พร้อมส่งไปตรวจกับ API ต่อ
+    """
     chat_id_str = str(chat_id)
-    
-    group_info = GROUP_CONFIG.get(chat_id_str)
-    if group_info:
-        category = group_info["category"]
-        is_user_group = group_info["is_user"]
-    else:
-        category = "UNKNOWN"
-        is_user_group = "user" in caption.lower()
 
-    batch_id = generate_batch_id(qr_list)
-    extracted = extract_data_from_caption(caption, is_user_group)
+    category = GROUP_CATEGORY.get(chat_id_str)
+    if category is None:
+        return "unknown_group", None
 
-    # 🛑 จุดที่ 1: เช็คซ้ำระดับแยกใบ (ข้ามกลุ่ม/มัดรวมใหม่)
+    # อ่าน QR ไม่ออกก็ยังรับเข้าระบบ แล้วให้แอดมินตัดสินจากข้อมูลในแชทแทน
+    batch_id = generate_batch_id(qr_list) if qr_list else generate_no_qr_batch_id(chat_id_str, msg_id)
+    extracted = extract_data_from_caption(caption)
+
+    # 🛑 เช็คซ้ำระดับแยกใบ (สลิปใบเดิมถูกมัดรวมมาใหม่ หรือส่งข้ามกลุ่มมา)
     for qr in qr_list:
         used = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
-        if used and used.batch_id != batch_id:
-            old_txn = db.query(Transaction).filter(Transaction.batch_id == used.batch_id).first()
-            # 💡 ปลดล็อค: ถ้าสลิปเก่าเคยถูก Reject ไปแล้ว ให้ถือว่าเอามาใช้ใหม่ได้ ไม่ซ้ำ!
-            if old_txn and old_txn.status.lower() not in ["reject", "rejected"]:
-                add_audit_log(db, batch_id, f"duplicate_qr_found_{qr}")
-                return "duplicate", None
+        if used and used.batch_id != batch_id and not _is_batch_rejected(db, used.batch_id):
+            add_audit_log(db, batch_id, f"duplicate_qr_found_{qr}")
+            return "duplicate", None
 
     txn = db.query(Transaction).filter(Transaction.batch_id == batch_id).first()
 
     if txn:
-        # 🛑 จุดที่ 2: ถ้ารูปเดิมเป๊ะ (batch_id เดิม)
-        # 💡 ปลดล็อค: เอา "Reject" ออกจากเงื่อนไขบล็อก เพื่อให้เอาสลิปเดิมส่งมาแก้ตัวได้
-        if txn.status.lower() in ["receive", "duplicate", "matched"]:
+        # 🛑 รูปเดิมเป๊ะถูกส่งซ้ำ (ยกเว้นเคยโดน Reject ให้ส่งมาแก้ตัวได้)
+        if str(txn.status).lower() not in REJECTED_STATUSES:
+            add_audit_log(db, batch_id, "duplicate_batch_resent")
             return "duplicate", txn
-            
-        if txn.category != category and txn.category != "UNKNOWN":
-            add_audit_log(db, batch_id, f"cross_category_error_{txn.category}_to_{category}")
-            return "duplicate", txn
-        
-        # ป้องกันกลุ่มเดิมส่งรูปเดิมซ้ำ (ยกเว้นเคสที่เพิ่งโดน Reject มา ให้ส่งซ้ำได้)
-        if txn.status.lower() not in ["reject", "rejected"]:
-            if (is_user_group and txn.g_user_chat_id) or (not is_user_group and txn.g_trans_chat_id):
-                return "duplicate", txn
-        
-        # 💡 จุดที่ 3: กรณี Pending หรือ Reject ให้รับข้อมูลใหม่เข้าไปอัปเดตทับของเดิม
-        if txn.status.lower() in ["pending", "reject", "rejected"]:
-                
-            if is_user_group:
-                txn.g_user_chat_id = chat_id_str
-                txn.g_user_msg_id = str(msg_id)
-                txn.raw_user_caption = caption
-                txn.chat_user_id = extracted["user_id"]
-                if extracted["amount"]: txn.chat_amount = extracted["amount"]
-            else:
-                txn.g_trans_chat_id = chat_id_str
-                txn.g_trans_msg_id = str(msg_id)
-                txn.raw_trans_caption = caption
-                txn.chat_trans_id = extracted["trans_id"]
-                txn.chat_fullname = extracted["fullname"]
-                # เอา amount ใหม่มาทับเผื่อเขาพิมพ์แก้ยอดมาให้ตรง
-                if extracted["amount"]: txn.chat_amount = extracted["amount"]
-            
-            # เช็คว่าหลังจากอัปเดตแล้ว มีคนส่งครบ 2 ฝั่งหรือยัง ถ้าครบให้เปลี่ยนสถานะไปจับคู่ใหม่
-            if txn.g_user_chat_id and txn.g_trans_chat_id:
-                txn.status = "matched"
-            else:
-                txn.status = "pending"
-                
-            db.commit()
-            return txn.status, txn
+
+        txn.category = category
+        _fill_transaction(txn, chat_id_str, msg_id, caption, extracted)
+        txn.status = "pending"
+        # ปลดล็อกการบันทึกลงชีทของรอบก่อนที่โดน Reject ไป
+        add_audit_log(db, batch_id, SHEET_REOPEN_ACTION)
     else:
-        # บันทึกกลุ่มใหม่ (First time)
-        new_txn = Transaction(batch_id=batch_id, category=category, status="pending")
-        
-        if is_user_group:
-            new_txn.g_user_chat_id = chat_id_str
-            new_txn.g_user_msg_id = str(msg_id)
-            new_txn.raw_user_caption = caption
-            new_txn.chat_user_id = extracted["user_id"]
-            new_txn.chat_amount = extracted["amount"]
+        txn = Transaction(batch_id=batch_id, category=category, status="pending")
+        _fill_transaction(txn, chat_id_str, msg_id, caption, extracted)
+        db.add(txn)
+
+    # จองสลิปทุกใบให้เป็นของ batch นี้ (รองรับ QR เก่าที่เคยถูก Reject แล้วเอามาส่งใหม่)
+    for qr in qr_list:
+        used = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
+        if used:
+            used.batch_id = batch_id
         else:
-            new_txn.g_trans_chat_id = chat_id_str
-            new_txn.g_trans_msg_id = str(msg_id)
-            new_txn.raw_trans_caption = caption
-            new_txn.chat_trans_id = extracted["trans_id"]
-            new_txn.chat_fullname = extracted["fullname"]
-            new_txn.chat_amount = extracted["amount"] 
-            
-        db.add(new_txn)
-        
-        # บันทึก QR ลงตาราง (รองรับกรณีเป็น QR เก่าที่เคยถูก Reject แล้วเอามามัดรวมใหม่)
-        for qr in qr_list:
-            used = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
-            if used:
-                used.batch_id = batch_id # โยก QR มาเป็นของ batch ใหม่แทน
-            else:
-                db.add(UsedQR(qr_ref=qr, batch_id=batch_id))
-            
-        db.commit()
-        return "pending", new_txn
+            db.add(UsedQR(qr_ref=qr, batch_id=batch_id))
+
+    db.commit()
+    return "new", txn

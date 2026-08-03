@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session
-from database.models import Transaction, AuditLog, UsedQR
+from database.models import AuditLog
 
-def get_transaction(db: Session, qr_ref: str):
-    """ค้นหา Transaction จาก QR Code"""
-    return db.query(Transaction).filter(Transaction.qr_ref == qr_ref).first()
+# action ที่ถือว่า batch นี้ถูกล็อกไว้แล้ว (กำลังบันทึก / บันทึกเสร็จแล้ว)
+SHEET_LOCK_ACTIONS = ['saving_started', 'sheet_saved']
+# action ที่ปลดล็อก: สลิปที่เคยถูก Reject แล้วถูกส่งเข้ามาใหม่
+SHEET_REOPEN_ACTION = 'batch_reopened'
+
 
 def add_audit_log(db: Session, qr_ref: str, action: str):
     """บันทึกประวัติการทำงาน (Log)"""
@@ -12,31 +14,19 @@ def add_audit_log(db: Session, qr_ref: str, action: str):
     db.commit()
 
 
-def is_sheet_saved(db: Session, batch_id: str) -> bool:
-    """ตรวจสอบว่าเคยบันทึกไปยัง Google Sheets สำหรับ batch นี้หรือไม่"""
-    return db.query(AuditLog).filter(AuditLog.qr_ref == batch_id, AuditLog.action == 'sheet_saved').first() is not None
-
-
-def remove_transaction_and_qr_links(db: Session, batch_id: str) -> None:
-    """Remove a transaction and all UsedQR links for a rejected/mismatched batch so it can be resent."""
-    txn = db.query(Transaction).filter(Transaction.batch_id == batch_id).first()
-    if txn:
-        db.delete(txn)
-
-    qr_links = db.query(UsedQR).filter(UsedQR.batch_id == batch_id).all()
-    for qr_link in qr_links:
-        db.delete(qr_link)
-
-    db.commit()
-
-
 def is_sheet_locked(db: Session, batch_id: str) -> bool:
-    """ตรวจสอบว่า batch นี้กำลังถูกบันทึกหรือบันทึกแล้ว (lock)
+    """ตรวจสอบว่า batch นี้กำลังถูกบันทึกหรือบันทึกไปแล้ว
 
-    ใช้ action 'saving_started' เป็นตัวบ่งชี้ว่ามีการเริ่มกระบวนการบันทึก
-    และ 'sheet_saved' แสดงว่าบันทึกเสร็จแล้ว
+    ดูจาก log ล่าสุดเท่านั้น เพราะสลิปที่เคยถูก Reject แล้วส่งกลับเข้ามาใหม่
+    จะมี log 'batch_reopened' คั่นไว้ ทำให้บันทึกรอบใหม่ได้ตามปกติ
     """
-    return db.query(AuditLog).filter(
-        AuditLog.qr_ref == batch_id,
-        AuditLog.action.in_(['saving_started', 'sheet_saved'])
-    ).first() is not None
+    last_log = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.qr_ref == batch_id,
+            AuditLog.action.in_(SHEET_LOCK_ACTIONS + [SHEET_REOPEN_ACTION]),
+        )
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    return last_log is not None and last_log.action in SHEET_LOCK_ACTIONS
