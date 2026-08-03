@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from telegram import Update
 from telegram.ext import ContextTypes
 from core.scanner import read_qr_code
@@ -15,6 +16,71 @@ from database.models import UsedQR
 from telegram.error import TimedOut, NetworkError
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_bank_name(value: str) -> str:
+    cleaned = (value or "").strip()
+    for prefix in ["นาย", "นางสาว", "น.ส.", "น.ส", "นาง"]:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip()
+            break
+
+    parts = [part for part in re.split(r"\s+", cleaned) if part]
+    if not parts:
+        return ""
+
+    first_name = re.sub(r"[^\wก-๙]", "", parts[0])
+    last_name_initial = ""
+    if len(parts) > 1:
+        last_name_initial = re.sub(r"[^\wก-๙]", "", parts[-1])[:1]
+
+    normalized = f"{first_name}{last_name_initial}"
+    normalized = re.sub(r"[\s\._,-]+", "", normalized)
+    return normalized.lower()
+
+
+def names_match_in_bank_format(api_name: str, reported_name: str) -> bool:
+    api_normalized = normalize_bank_name(api_name)
+    reported_normalized = normalize_bank_name(reported_name)
+    if not api_normalized or not reported_normalized:
+        return False
+    return api_normalized == reported_normalized
+
+
+def build_bank_mismatch_reason(bank_codes: list[str], bank_matches: list[bool]) -> str:
+    mismatched_codes = [code for code, matched in zip(bank_codes, bank_matches) if code and not matched]
+    if mismatched_codes:
+        return (
+            f"❌ เลขธนาคารไม่ตรง: {', '.join(mismatched_codes)} "
+            f"ไม่อยู่ใน ACCOUNT_MAPPING"
+        )
+    if bank_codes:
+        return "❌ เลขธนาคารไม่ตรง: บัญชีธนาคารที่รับมาไม่ตรงกับบัญชีของบริษัท"
+    return "❌ เลขธนาคารไม่ตรง: ไม่สามารถอ่านเลขธนาคารจากข้อมูลผู้รับได้"
+
+
+async def send_manual_review_message(
+    bot,
+    chat_id: str,
+    reply_to_message_id: int,
+    batch_id: str,
+    reasons: list[str],
+    footer_message: str,
+):
+    keyboard = get_approval_keyboard(batch_id)
+    manual_reasons = reasons or ["• ต้องตรวจสอบสลิปด้วยมือ"]
+    alert_text = (
+        "⚠️ ต้องตรวจสอบสลิปด้วยมือ\n\n"
+        + "\n".join(manual_reasons)
+        + f"\n\n{footer_message}"
+    )
+
+    await bot.send_message(
+        chat_id=chat_id,
+        reply_to_message_id=reply_to_message_id,
+        text=alert_text,
+        reply_markup=keyboard,
+    )
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
@@ -88,6 +154,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 total_api_amount = 0.0
                 all_senders = []
                 all_receivers = []
+                all_bank_codes = []
+                all_bank_matches = []
                 api_success = True
                 error_msg = ""
                 user_error_msg = "" # 👈 ตัวแปรสำหรับรับข้อความภาษาไทย
@@ -99,6 +167,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         total_api_amount += api_result["amount"]
                         all_senders.append(api_result["sender"])
                         all_receivers.append(api_result["receiver"])
+                        all_bank_codes.append(api_result.get("receiver_bank_code", ""))
+                        all_bank_matches.append(api_result.get("receiver_bank_matches", False))
                         # ค้นหา UsedQR ใบนี้ แล้วยัด JSON ใส่เข้าไป
                         used_qr = db.query(UsedQR).filter(UsedQR.qr_ref == qr).first()
                         if used_qr:
@@ -123,24 +193,34 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     txn.receiver_names = receiver_names_str
                     txn.receiver_account = receiver_names_str  # ♻️ ใช้ค่า mapped เต็มแทน chat_bank
                     
-                    # 🔍 ลอจิกตรวจสอบชื่อ (เช็คเฉพาะชื่อจริง ไม่เอาคำนำหน้าและนามสกุล)
-                    is_name_match = True
+                    sender_matches = True
                     if chat_name and chat_name.strip() != "-":
-                        clean_name = chat_name.strip()
-                        for p in ["นาย", "นางสาว", "น.ส.", "น.ส. ", "นาง"]:
-                            if clean_name.startswith(p):
-                                clean_name = clean_name[len(p):].strip()
-                                break
-                        
-                        first_name = clean_name.split()[0] if clean_name else ""
-                        
-                        if first_name and first_name not in sender_names_str:
-                            is_name_match = False
+                        sender_matches = all(
+                            names_match_in_bank_format(sender, chat_name)
+                            for sender in all_senders
+                            if sender and sender.strip()
+                        )
+                    bank_matches = all(all_bank_matches) if all_bank_matches else False
+                    is_name_match = True if not chat_name or chat_name.strip() == "-" else sender_matches
+
+                    normalized_api_names = [normalize_bank_name(sender) for sender in all_senders if sender and sender.strip()]
+                    normalized_reported_name = normalize_bank_name(chat_name)
+                    logger.info(
+                        "Slip name check | api_names=%s | reported_name=%s | normalized_api_names=%s | normalized_reported_name=%s | name_match=%s | bank_match=%s | amount_match=%s",
+                        sender_names_str,
+                        chat_name,
+                        normalized_api_names,
+                        normalized_reported_name,
+                        is_name_match,
+                        bank_matches,
+                        chat_amount == total_api_amount,
+                    )
                     
                     verification_decision = determine_verification_action(
                         api_success=True,
                         amount_matches=(chat_amount == total_api_amount),
                         name_matches=is_name_match,
+                        bank_matches=bank_matches,
                     )
 
                     if verification_decision == VerificationDecision.AUTO_RECEIVE:
@@ -182,32 +262,47 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         remove_transaction_and_qr_links(db, txn.batch_id)
                         
                         reject_reason = ""
+                        if not bank_matches:
+                            reject_reason += build_bank_mismatch_reason(all_bank_codes, all_bank_matches) + "\n"
                         if chat_amount != total_api_amount:
                             reject_reason += f"❌ Amount: Slip `{total_api_amount}` | Reported `{chat_amount}`\n"
                         if not is_name_match:
-                            reject_reason += f"❌ Sender Name: Slip `{sender_names_str}` | Reported `{chat_name}`\n"
+                            reject_reason += f"❌ Sender Name format mismatch: Slip `{sender_names_str}` | Reported `{chat_name}`\n"
                             
                         await context.bot.send_message(
                             chat_id=target_chat_id,
                             reply_to_message_id=target_msg_id,
                             text=(f"❌ Auto-Rejected: Information Mismatch\n\n"
-                                  f"{reject_reason}\n"
+                                  f"{reject_reason if reject_reason else '❌ Unknown mismatch reason'}\n"
                                   f"(This slip group has been automatically rejected.)"),
                         )
-                else:
-                    # แจ้งเตือน User ด้วยข้อความภาษาไทยสวยๆ จากไฟล์ easyslip.py
-                    keyboard = get_approval_keyboard(txn.batch_id)
-                    
-                    alert_text = (
-                        f"{user_error_msg}\n\n"
-                        f"Please perform a manual review of all slips and click one of the buttons below to proceed."
-                    )
+                elif verification_decision == VerificationDecision.MANUAL_REVIEW:
+                    add_audit_log(db, txn.batch_id, "manual_review_required")
+                    db.commit()
 
-                    await context.bot.send_message(
-                        chat_id=target_chat_id,
-                        reply_to_message_id=target_msg_id,
-                        text=alert_text,
-                        reply_markup=keyboard,
+                    manual_reasons = []
+                    if not bank_matches:
+                        manual_reasons.append("• เลขธนาคารไม่ตรง")
+                    if not is_name_match:
+                        manual_reasons.append("• ชื่อผู้ส่งไม่ตรง")
+
+                    await send_manual_review_message(
+                        context.bot,
+                        target_chat_id,
+                        target_msg_id,
+                        txn.batch_id,
+                        manual_reasons,
+                        "กรณีเลขธนาคารไม่ตรง ให้กด Receive หรือ Reject เองเพื่อเช็ค manual",
+                    )
+                else:
+                    # ใช้ manual flow เดียวกัน แต่เปลี่ยนเหตุผลเป็นกรณี API ใช้ไม่ได้
+                    await send_manual_review_message(
+                        context.bot,
+                        target_chat_id,
+                        target_msg_id,
+                        txn.batch_id,
+                        [f"• {user_error_msg}"],
+                        "Please perform a manual review of all slips and click one of the buttons below to proceed.",
                     )
                     
     if os.path.exists(temp_path):

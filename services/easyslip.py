@@ -78,16 +78,23 @@ def verify_slip(qr_payload: str) -> dict:
             if "sender" in data and "account" in data["sender"] and "name" in data["sender"]["account"]:
                 name_data = data["sender"]["account"]["name"]
                 sender = name_data.get("th", name_data.get("en", "ไม่ระบุชื่อ"))
-                
+            
             # 👇 --- เพิ่มโค้ดชุดนี้สำหรับดึงข้อมูล "ผู้รับ" ---
             receiver_info = "-"
+            receiver_bank_code = ""
+            receiver_bank_matches = False
             if "receiver" in data and "account" in data["receiver"]:
                 recv_acc = data["receiver"]["account"]
                 
                 # 1. ลองหา 4 หลักธนาคารก่อนจากข้อมูล bank.code ก่อน
-                bank_code = extract_bank_code_from_receiver_account(recv_acc)
-                if bank_code:
-                    receiver_info = ACCOUNT_MAPPING.get(bank_code, bank_code)
+                receiver_bank_code = extract_bank_code_from_receiver_account(recv_acc)
+                if receiver_bank_code:
+                    mapped_bank = ACCOUNT_MAPPING.get(receiver_bank_code)
+                    if mapped_bank:
+                        receiver_info = mapped_bank
+                        receiver_bank_matches = True
+                    else:
+                        receiver_info = receiver_bank_code
                 
                 # 2. ถ้าไม่มีเลขบัญชี (เช่น ทรูมันนี่) ให้ดึง "ชื่อ" มาแทน
                 elif "name" in recv_acc and "th" in recv_acc["name"]:
@@ -99,6 +106,8 @@ def verify_slip(qr_payload: str) -> dict:
                 "amount": float(amount),
                 "sender": sender,
                 "receiver": receiver_info,  # 👈 ส่งค่าที่ดึงได้กลับไปด้วย
+                "receiver_bank_code": receiver_bank_code,
+                "receiver_bank_matches": receiver_bank_matches,
                 "raw_data": data
             }
         else:
