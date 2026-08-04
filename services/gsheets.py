@@ -1,5 +1,7 @@
+from dataclasses import dataclass
 from datetime import datetime
 import logging
+import threading
 from typing import Tuple, Any, Dict
 from zoneinfo import ZoneInfo
 
@@ -28,6 +30,40 @@ def get_sheet_name_for_datetime(dt: datetime) -> str:
     return dt.astimezone(BANGKOK_TZ).strftime("%d-%m-%Y")
 
 
+@dataclass(frozen=True)
+class SheetEntry:
+    """ข้อมูลเท่าที่ต้องใช้เขียนลงชีท
+
+    แยกออกมาจาก Transaction ของ SQLAlchemy เพราะการเขียนชีทรันคนละเธรดกับ bot
+    ถ้าส่ง ORM object ข้ามเธรดไป การอ่าน attribute อาจไปเรียก session ของอีกเธรดโดยไม่ตั้งใจ
+    """
+    batch_id: str
+    category: str
+    status: str
+    chat_trans_id: str | None
+    chat_fullname: str | None
+    sender_names: str | None
+    chat_amount: float | None
+    api_total_amount: float | None
+    receiver_account: str | None
+    chat_bank: str | None
+
+    @classmethod
+    def from_transaction(cls, txn) -> "SheetEntry":
+        return cls(
+            batch_id=txn.batch_id,
+            category=txn.category,
+            status=txn.status,
+            chat_trans_id=txn.chat_trans_id,
+            chat_fullname=txn.chat_fullname,
+            sender_names=txn.sender_names,
+            chat_amount=txn.chat_amount,
+            api_total_amount=txn.api_total_amount,
+            receiver_account=txn.receiver_account,
+            chat_bank=txn.chat_bank,
+        )
+
+
 class GoogleSheetsService:
     _instance = None
 
@@ -46,6 +82,10 @@ class GoogleSheetsService:
             self.client = gspread.authorize(creds)
             self._cached_month = None
             self._cached_spreadsheet_id = None
+            # bot เขียนสลิปจาก worker thread ส่วน scheduler สร้างชีทประจำวันจากอีกเธรด
+            # ทั้งสองใช้ service ตัวเดียวกัน จึงต้องเข้าคิวกันไม่ให้คำนวณแถวถัดไปทับกัน
+            # (RLock เพราะ append_to_sheet อาจเรียก create_today_sheet ต่อในเธรดเดียวกัน)
+            self._write_lock = threading.RLock()
             logger.info("Google Sheets Service initialized successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets Service: {e}")
@@ -597,7 +637,11 @@ class GoogleSheetsService:
         self._apply_summary_dropdowns(worksheet)
 
     def create_today_sheet(self):
-        """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี"""
+        """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี (เข้าคิวร่วมกับการเขียนสลิป)"""
+        with self._write_lock:
+            self._create_today_sheet_locked()
+
+    def _create_today_sheet_locked(self):
         spreadsheet = self._get_dynamic_spreadsheet()
         bangkok_now = get_bangkok_now()
         sheet_name = get_sheet_name_for_datetime(bangkok_now)
@@ -693,77 +737,84 @@ class GoogleSheetsService:
 
         self._write_summary_tables(worksheet, customers)
 
-    def append_to_sheet(self, txn) -> Tuple[bool, str]:
-        """เพิ่ม Transaction ใหม่ลงใน Sheet ประจำวัน (ต่อท้ายเฉพาะคอลัมน์ A:H)"""
-        if str(txn.status).strip().lower() == "reject":
+    def append_to_sheet(self, entry: SheetEntry) -> Tuple[bool, str]:
+        """เพิ่มรายการใหม่ลงใน Sheet ประจำวัน (เขียนเฉพาะ 4 คอลัมน์ของกลุ่มตัวเอง)
+
+        ต้องรับ SheetEntry ไม่ใช่ ORM object เพราะฟังก์ชันนี้ถูกเรียกจาก worker thread
+        """
+        if str(entry.status).strip().lower() == "reject":
             logger.info("Status Reject Skip saving to Google Sheets")
             return True, ""
         # Duplicate write guard is handled by DB audit logs (checked by caller)
-        
+
         try:
-            spreadsheet = self._get_dynamic_spreadsheet()
-            now = get_bangkok_now()
-            sheet_name = get_sheet_name_for_datetime(now)
+            # กันไม่ให้สองการเขียนคำนวณแถวถัดไปได้เลขเดียวกันแล้วทับกัน
+            with self._write_lock:
+                spreadsheet = self._get_dynamic_spreadsheet()
+                now = get_bangkok_now()
+                sheet_name = get_sheet_name_for_datetime(now)
 
-            # ดึง Worksheet ประจำวัน หรือสร้างใหม่ถ้ายังไม่มี
-            try:
-                worksheet = spreadsheet.worksheet(sheet_name)
-            except gspread.exceptions.WorksheetNotFound:
-                self.create_today_sheet()
-                worksheet = spreadsheet.worksheet(sheet_name)
+                # ดึง Worksheet ประจำวัน หรือสร้างใหม่ถ้ายังไม่มี
+                try:
+                    worksheet = spreadsheet.worksheet(sheet_name)
+                except gspread.exceptions.WorksheetNotFound:
+                    self.create_today_sheet()
+                    worksheet = spreadsheet.worksheet(sheet_name)
 
+                # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
+                formatted_time = now.strftime("%H:%M")
+                if formatted_time.startswith("0"):
+                    formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
 
-            # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
-            formatted_time = now.strftime("%H:%M")
-            if formatted_time.startswith("0"):
-                formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
+                # Trans ID: caption -> ชื่อผู้ส่งจากสลิป -> ชื่อผู้ส่งที่แจ้งมาในแชท (กรณีอ่านสลิปไม่ออก)
+                trans_identifier = (
+                    entry.chat_trans_id
+                    or get_first_names(entry.sender_names)
+                    or get_first_names(entry.chat_fullname)
+                    or ""
+                )
 
-            # Trans ID: caption -> ชื่อผู้ส่งจากสลิป -> ชื่อผู้ส่งที่แจ้งมาในแชท (กรณีอ่านสลิปไม่ออก)
-            trans_identifier = (
-                txn.chat_trans_id
-                or get_first_names(txn.sender_names)
-                or get_first_names(txn.chat_fullname)
-                or ""
+                # แปลงยอดเงินเป็น float
+                trans_amt = self._parse_float(entry.api_total_amount or entry.chat_amount)
+                amt_display = trans_amt if trans_amt > 0 else "-"
+                bank_display = entry.receiver_account or entry.chat_bank or "-"
+
+                # 💡 สร้าง Block ข้อมูล 4 คอลัมน์ [Trans ID, ยอดเงิน, Time, บัญชี]
+                data_block = [trans_identifier, amt_display, formatted_time, bank_display]
+
+                # 💡 เช็ค Category ว่าเป็นกลุ่มไหน
+                category_name = str(entry.category).strip().upper()
+
+                if "12" in category_name or category_name == "VIP_12":
+                    # --- กรณีเป็นกลุ่ม VIP 12 ---
+                    # นับความลึกเฉพาะคอลัมน์ P (คอลัมน์ที่ 16)
+                    col_p_values = worksheet.col_values(16)
+                    next_row = len(col_p_values) + 1
+                    update_range = f"P{next_row}:S{next_row}"
+                else:
+                    # --- กรณีเป็นกลุ่ม VIP WE (หรือค่าเริ่มต้น) ---
+                    # นับความลึกเฉพาะคอลัมน์ L (คอลัมน์ที่ 12)
+                    col_l_values = worksheet.col_values(12)
+                    next_row = len(col_l_values) + 1
+                    update_range = f"L{next_row}:O{next_row}"
+
+                # 📝 สั่งเขียนข้อมูลลงไปเฉพาะ 4 ช่องของกลุ่มตัวเอง (ไม่ก้าวก่ายฝั่งตรงข้าม)
+                worksheet.update(update_range, [data_block])
+
+                # สร้าง Dropdown ให้กับบรรทัดใหม่
+                self._apply_agent_dropdowns_to_row(worksheet, next_row)
+
+                # 1. อัปเดต Summary รายวัน
+                self.update_daily_summary(worksheet)
+
+                self._apply_main_table_style(worksheet)
+
+                self._apply_summary_style(worksheet)
+
+            logger.info(
+                "✅ บันทึกข้อมูลลงชีทสำเร็จ | batch_id=%s | row=%s | range=%s",
+                entry.batch_id, next_row, update_range,
             )
-            
-            # แปลงยอดเงินเป็น float
-            trans_amt = self._parse_float(txn.api_total_amount or txn.chat_amount)
-            amt_display = trans_amt if trans_amt > 0 else "-"
-            bank_display = txn.receiver_account or txn.chat_bank or "-"
-            
-            # 💡 สร้าง Block ข้อมูล 4 คอลัมน์ [Trans ID, ยอดเงิน, Time, บัญชี]
-            data_block = [trans_identifier, amt_display, formatted_time, bank_display]
-
-            # 💡 เช็ค Category จาก DB ว่าเป็นกลุ่มไหน
-            category_name = str(txn.category).strip().upper()
-            
-            if "12" in category_name or category_name == "VIP_12":
-                # --- กรณีเป็นกลุ่ม VIP 12 ---
-                # นับความลึกเฉพาะคอลัมน์ P (คอลัมน์ที่ 16)
-                col_p_values = worksheet.col_values(16)
-                next_row = len(col_p_values) + 1
-                update_range = f"P{next_row}:S{next_row}"
-            else:
-                # --- กรณีเป็นกลุ่ม VIP WE (หรือค่าเริ่มต้น) ---
-                # นับความลึกเฉพาะคอลัมน์ L (คอลัมน์ที่ 12)
-                col_l_values = worksheet.col_values(12)
-                next_row = len(col_l_values) + 1
-                update_range = f"L{next_row}:O{next_row}"
-
-            # 📝 สั่งเขียนข้อมูลลงไปเฉพาะ 4 ช่องของกลุ่มตัวเอง (ไม่ก้าวก่ายฝั่งตรงข้าม)
-            worksheet.update(update_range, [data_block])
-            
-            # สร้าง Dropdown ให้กับบรรทัดใหม่
-            self._apply_agent_dropdowns_to_row(worksheet, next_row)
-
-            # 1. อัปเดต Summary รายวัน
-            self.update_daily_summary(worksheet)
-
-            self._apply_main_table_style(worksheet)
-            
-            self._apply_summary_style(worksheet)
-
-            logger.info(f"✅ บันทึกข้อมูล อัปเดต Summary และใส่ Style สำเร็จ (Row {next_row})")
             return True, ""
 
         except Exception as e:
@@ -776,5 +827,5 @@ class GoogleSheetsService:
 sheets_service = GoogleSheetsService()
 
 
-def append_to_sheet(txn) -> Tuple[bool, str]:
-    return sheets_service.append_to_sheet(txn)
+def append_to_sheet(entry: SheetEntry) -> Tuple[bool, str]:
+    return sheets_service.append_to_sheet(entry)

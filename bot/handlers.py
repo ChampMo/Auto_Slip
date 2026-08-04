@@ -11,8 +11,14 @@ from database.session import SessionLocal
 from core.matcher import process_incoming_slip
 from core.names import split_bank_name
 from services.easyslip import verify_slip, extract_amount_from_qr_payload, BANK_DROPDOWN_VALUES
-from database.crud import add_audit_log, is_sheet_locked, SHEET_REOPEN_ACTION
-from services.gsheets import append_to_sheet
+from database.crud import (
+    add_audit_log,
+    claim_transaction,
+    is_sheet_locked,
+    DECIDED_STATUSES,
+    SHEET_REOPEN_ACTION,
+)
+from services.gsheets import append_to_sheet, SheetEntry
 import json
 from database.models import Transaction, UsedQR
 from telegram.error import TimedOut, NetworkError
@@ -508,7 +514,7 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
             add_audit_log(db, txn.batch_id, "api_verified_matched")
             db.commit()
 
-            sheet_success, sheet_error_msg = append_to_sheet(txn)
+            sheet_success, sheet_error_msg = await write_entry_to_sheet(txn)
             if sheet_success:
                 add_audit_log(db, txn.batch_id, "sheet_saved")
                 db.commit()
@@ -627,6 +633,28 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
 SLIP_NOT_FOUND_TEXT = "This slip is no longer in the system. Please send it again."
 
 
+async def announce_already_decided(query, txn):
+    """บอกว่ารายการนี้ถูกตัดสินไปแล้ว (กดซ้ำเอง หรือแอดมินอีกคนกดตัดหน้า)"""
+    already_received = str(txn.status) == "Receive"
+    await query.answer(
+        f"This slip was already {'received' if already_received else 'rejected'}.",
+        show_alert=True,
+    )
+    await query.edit_message_text(
+        text=("✅ Already received" if already_received else "❌ Already rejected"),
+        reply_markup=None,
+    )
+
+
+async def write_entry_to_sheet(txn):
+    """เขียนลงชีทใน worker thread เพื่อไม่ให้บอททั้งตัวค้างระหว่างรอ Google
+
+    ต้องคัดลอกค่าออกจาก ORM object ก่อนส่งข้ามเธรด (session ของ SQLAlchemy ไม่ thread-safe)
+    """
+    entry = SheetEntry.from_transaction(txn)
+    return await asyncio.to_thread(append_to_sheet, entry)
+
+
 async def save_receive_to_sheet(query, db, txn, bank_value: str):
     """บันทึกรายการที่แอดมินกดรับลงชีท แล้วรายงานผลกลับไปที่ข้อความเดิม"""
     if is_sheet_locked(db, txn.batch_id):
@@ -645,7 +673,7 @@ async def save_receive_to_sheet(query, db, txn, bank_value: str):
         reply_markup=None,
     )
 
-    sheet_success, sheet_error_msg = append_to_sheet(txn)
+    sheet_success, sheet_error_msg = await write_entry_to_sheet(txn)
 
     if sheet_success:
         add_audit_log(db, txn.batch_id, "sheet_saved")
@@ -685,9 +713,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text(text=SLIP_NOT_FOUND_TEXT, reply_markup=None)
                 return
 
+            # ปุ่มเลือกธนาคารอาจค้างอยู่บนจอของแอดมินอีกคน แม้รายการจะถูกตัดสินไปแล้ว
+            if not claim_transaction(db, txn.batch_id, "Receive"):
+                await announce_already_decided(query, txn)
+                return
+
             txn.chat_bank = bank_value
             txn.receiver_account = bank_value
-            txn.status = "Receive"
             add_audit_log(db, txn.batch_id, "manual_bank_selected")
             await save_receive_to_sheet(query, db, txn, bank_value)
             return
@@ -708,20 +740,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text=SLIP_NOT_FOUND_TEXT, reply_markup=None)
             return
 
-        if txn.status in ["Receive", "Reject"]:
-            already_received = txn.status == "Receive"
-            await query.answer(
-                f"This slip was already {'received' if already_received else 'rejected'}.",
-                show_alert=True,
-            )
-            await query.edit_message_text(
-                text=("✅ Already received" if already_received else "❌ Already rejected"),
-                reply_markup=None,
-            )
+        if txn.status in DECIDED_STATUSES:
+            await announce_already_decided(query, txn)
             return
 
         if action == "reject":
-            txn.status = "Reject"
+            if not claim_transaction(db, txn.batch_id, "Reject"):
+                await announce_already_decided(query, txn)
+                return
+
             add_audit_log(db, txn.batch_id, "admin_rejected")
             await query.answer("Slip rejected")
             await query.edit_message_text(
@@ -733,15 +760,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Receive: ใช้บัญชีที่อ่านได้จากสลิป ถ้าไม่รู้ค่อยให้แอดมินเลือกเอง
-        txn.status = "Receive"
         known_bank = resolve_known_bank_value(txn)
 
         if action == "agent" or not known_bank:
+            # ยังไม่จองสิทธิ์ตรงนี้ เพราะยังไม่ได้ตัดสินอะไร แค่ขอให้เลือกธนาคารก่อน
             # สลับแค่ปุ่ม ไม่ทับข้อความผลตรวจ กด Back แล้วจะได้ข้อความเดิมครบ
             await query.answer("Choose the bank account for this slip")
             await query.edit_message_reply_markup(
                 reply_markup=get_bank_selection_keyboard(txn.batch_id)
             )
+            return
+
+        if not claim_transaction(db, txn.batch_id, "Receive"):
+            await announce_already_decided(query, txn)
             return
 
         txn.chat_bank = known_bank
