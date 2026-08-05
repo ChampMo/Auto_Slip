@@ -28,43 +28,60 @@ class GoogleDriveService:
             logger.error(f"Failed to initialize Google Drive Service: {e}")
             raise e
 
-    def get_spreadsheet_id_by_name(self, target_name: str) -> str:
-        """
-        ค้นหาไฟล์ใน DRIVE_FOLDER_ID ตามชื่อที่กำหนด แล้วดึง Spreadsheet ID ออกมาใช้งาน
-        :param target_name: ชื่อไฟล์ที่ต้องการค้นหา (เช่น "Slips_07-2026")
-        :return: Spreadsheet ID หรือ None ถ้าไม่พบ
-        """
-        parent_id = config.DRIVE_FOLDER_ID
+    FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+
+    def _find_child_id(self, target_name: str, parent_id: str, mime_type: str = None) -> str:
+        """ค้นหาไฟล์/โฟลเดอร์ชื่อที่กำหนด ซึ่งอยู่ใต้ parent_id โดยตรง (ไม่ไล่เข้าโฟลเดอร์ย่อย)"""
         if not parent_id:
-            logger.error("DRIVE_FOLDER_ID is not set in the configuration/environment.")
+            logger.error("Parent folder ID is empty — check DRIVE_FOLDER_ID in the environment.")
             return None
 
+        # ชื่อที่มี ' หรือ \ จะทำให้ query เพี้ยน ต้อง escape ก่อน
+        escaped_name = target_name.replace('\\', '\\\\').replace("'", "\\'")
+        query = f"'{parent_id}' in parents and name = '{escaped_name}' and trashed = false"
+        if mime_type:
+            query += f" and mimeType = '{mime_type}'"
+
         try:
-            # ค้นหาไฟล์ในโฟลเดอร์ที่ตรงกับชื่อและไม่ใช่ไฟล์ที่ถูกลบ
-            query = f"'{parent_id}' in parents and name = '{target_name}' and trashed = false"
-            
             results = self.service.files().list(
                 q=query,
                 spaces='drive',
                 fields='files(id, name, webViewLink)'
             ).execute()
-            
+
             files = results.get('files', [])
-            
+
             if files:
                 file_obj = files[0]
                 file_id = file_obj.get('id')
-                file_url = file_obj.get('webViewLink')
-                
-                logger.info(f"Found file '{target_name}' | ID: {file_id} | URL: {file_url}")
+                logger.info(
+                    "Found '%s' | ID: %s | URL: %s",
+                    target_name, file_id, file_obj.get('webViewLink'),
+                )
                 return file_id
-            
-            logger.warning(f"File named '{target_name}' not found in folder ID: {parent_id}")
+
+            logger.warning("'%s' not found in folder ID: %s", target_name, parent_id)
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get spreadsheet ID by name: {e}")
+            logger.error(f"Failed to look up '{target_name}' in Drive: {e}")
             return None
+
+    def get_folder_id_by_name(self, target_name: str, parent_id: str = None) -> str:
+        """ค้นหาโฟลเดอร์ตามชื่อ (เช่น "Deposit-2026") — ไม่ระบุ parent = โฟลเดอร์หลักจาก .env"""
+        return self._find_child_id(
+            target_name,
+            parent_id or config.DRIVE_FOLDER_ID,
+            mime_type=self.FOLDER_MIME_TYPE,
+        )
+
+    def get_spreadsheet_id_by_name(self, target_name: str, parent_id: str = None) -> str:
+        """ค้นหาไฟล์ Spreadsheet ตามชื่อ (เช่น "check_08-2026") แล้วคืน ID
+
+        :param parent_id: โฟลเดอร์ที่ให้ค้นหา ไม่ระบุ = โฟลเดอร์หลักจาก .env
+        :return: Spreadsheet ID หรือ None ถ้าไม่พบ
+        """
+        return self._find_child_id(target_name, parent_id or config.DRIVE_FOLDER_ID)
 
 # สร้าง Object ตัวแทนสำหรับเรียกใช้งานแบบ Singleton
 drive_service = GoogleDriveService()

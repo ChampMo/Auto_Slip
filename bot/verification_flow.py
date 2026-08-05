@@ -13,6 +13,7 @@ def determine_verification_action(
     name_matches: bool,
     bank_matches: bool,
     multi_slip_batch: bool = False,
+    caption_unreliable: bool = False,
 ) -> VerificationDecision:
     """รับสลิปอัตโนมัติได้ก็ต่อเมื่อผ่านครบทั้ง 3 ข้อ
 
@@ -23,6 +24,11 @@ def determine_verification_action(
     ข้อ 2 หรือ 3 ไม่ตรง = reject อัตโนมัติ
     เหลือแค่ข้อ 1 ที่ไม่ตรง หรือข้อมูลไม่พอจะตัดสิน = ขึ้นปุ่มถามแอดมิน
     """
+    # ข้อความในแชทขัดแย้งกันเอง (เช่น 100+100 = 300) เทียบยอดไปก็ไม่มีความหมาย
+    # ห้าม reject อัตโนมัติเด็ดขาด เพราะยอดที่ "ไม่ตรง" อาจเกิดจากเขาพิมพ์ผิดเฉยๆ
+    if caption_unreliable:
+        return VerificationDecision.MANUAL_REVIEW
+
     # รูปเดียวมีหลายสลิป หรือ API ตรวจไม่ผ่าน = ข้อมูลไม่ครบพอจะตัดสินเอง
     if multi_slip_batch or not api_success:
         return VerificationDecision.MANUAL_REVIEW

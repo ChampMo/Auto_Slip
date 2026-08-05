@@ -1,19 +1,35 @@
 import re
 
 
-# เรียงคำนำหน้าจากยาวไปสั้น เพื่อไม่ให้ "นาง" ไปตัดหน้า "นางสาว"
+# คำนำหน้าภาษาไทย เรียงจากยาวไปสั้น เพื่อไม่ให้ "นาง" ไปตัดหน้า "นางสาว"
+# ภาษาไทยมักเขียนติดกับชื่อ (เช่น "นายสมชาย") จึงตัดโดยไม่ต้องมีตัวคั่น
 NAME_TITLES = ["นางสาว", "นาย", "น.ส.", "น.ส", "นาง"]
+
+# คำนำหน้าภาษาอังกฤษ ต้องตามด้วยช่องว่าง (มีจุดหรือไม่มีก็ได้)
+# ถ้าไม่บังคับให้มีตัวคั่น "MR" จะไปตัดหน้า "MRS" และชื่อที่ขึ้นต้นด้วย MS/DR จะโดนตัดผิด
+# เรียง MRS/MISS ไว้ก่อน MR/MS เพราะ regex เลือกตัวที่ match ตัวแรก
+ENGLISH_NAME_TITLE_PATTERN = re.compile(r"(?i)^(MRS|MISS|MR|MS|DR)\.?\s+")
 
 # ค่าที่ API ส่งกลับมาเมื่ออ่านชื่อผู้ส่งไม่ได้ ให้ถือว่าไม่มีชื่อ
 UNKNOWN_NAMES = {"unknown", "ไม่ระบุชื่อ", "-", ""}
 
 
 def strip_name_title(value: str) -> str:
-    """ตัดคำนำหน้าชื่อออก เช่น 'นาย ดุลยฤทธิ์ ส' -> 'ดุลยฤทธิ์ ส'"""
+    """ตัดคำนำหน้าชื่อออก รองรับทั้งไทยและอังกฤษ
+
+    'นาย ดุลยฤทธิ์ ส' -> 'ดุลยฤทธิ์ ส'
+    'MR ATHIWAT N'    -> 'ATHIWAT N'
+    """
     cleaned = (value or "").strip()
+
     for prefix in NAME_TITLES:
         if cleaned.startswith(prefix):
             return cleaned[len(prefix):].strip()
+
+    english_title = ENGLISH_NAME_TITLE_PATTERN.match(cleaned)
+    if english_title:
+        return cleaned[english_title.end():].strip()
+
     return cleaned
 
 

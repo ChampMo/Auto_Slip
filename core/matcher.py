@@ -1,7 +1,7 @@
-import re
 import hashlib
 from sqlalchemy.orm import Session
 
+from core.captions import extract_data_from_caption
 from core.config import config
 from database.models import Transaction, UsedQR
 from database.crud import add_audit_log, SHEET_REOPEN_ACTION
@@ -13,41 +13,9 @@ GROUP_CATEGORY = {
     str(config.VIP_12_CHAT_ID): "VIP_12",
 }
 
-REJECTED_STATUSES = {"reject", "rejected"}
-
-# รองรับได้ทั้ง "Amount : THB 400" และ "AMOUNT THB : 2500.00"
-AMOUNT_PATTERN = re.compile(r'(?i)AMOUNT\s*(?:[:=]\s*)?(?:THB\s*(?:[:=]\s*)?)?([0-9,.]+)')
-# ชื่อผู้ใช้เป็นตัวอักษรผสมตัวเลขได้ เช่น "User :  benz4455"
-USER_PATTERN = re.compile(r'(?i)\bUser\s*(?:ID)?\s*[:=]\s*(\S+)')
-TRANS_ID_PATTERN = re.compile(r'(?i)\bTRANS\s*ID\s*[:=]\s*(\S+)')
-FULLNAME_PATTERN = re.compile(r'(?i)\bFULL\s*NAME\s*[:=]\s*([^\n]+)')
-
-
-def extract_data_from_caption(caption: str) -> dict:
-    """ดึงข้อมูลจาก caption โดยรองรับทุก format ที่กลุ่มอาจส่งมา (มีฟิลด์ไหนก็เก็บฟิลด์นั้น)"""
-    data = {"amount": None, "user_id": None, "trans_id": None, "fullname": None}
-    caption = caption or ""
-
-    amount_match = AMOUNT_PATTERN.search(caption)
-    if amount_match:
-        try:
-            data["amount"] = float(amount_match.group(1).replace(',', ''))
-        except ValueError:
-            pass
-
-    user_match = USER_PATTERN.search(caption)
-    if user_match:
-        data["user_id"] = user_match.group(1)
-
-    trans_match = TRANS_ID_PATTERN.search(caption)
-    if trans_match:
-        data["trans_id"] = trans_match.group(1)
-
-    name_match = FULLNAME_PATTERN.search(caption)
-    if name_match:
-        data["fullname"] = name_match.group(1).strip()
-
-    return data
+# สถานะที่ถือว่า "จบไปแล้วแบบไม่ได้บันทึก" จึงยอมให้ส่งสลิปใบเดิมเข้ามาใหม่ได้
+# interrupted = บอทดับระหว่างกำลังบันทึกลงชีท (กู้คืนตอนบูตครั้งถัดไป)
+REJECTED_STATUSES = {"reject", "rejected", "interrupted"}
 
 
 def generate_batch_id(qr_list: list):
@@ -77,6 +45,8 @@ def _fill_transaction(txn: Transaction, chat_id: str, msg_id: str, caption: str,
     txn.chat_trans_id = extracted["trans_id"]
     txn.chat_fullname = extracted["fullname"]
     txn.chat_amount = extracted["amount"]
+    # เช่น "100 + 100 = 300" — บวกไม่ลง ต้องให้คนมาดู ห้ามตัดสินเอง
+    txn.caption_warning = extracted["amount_note"]
 
 
 def process_incoming_slip(db: Session, qr_list: list, chat_id: str, msg_id: str, caption: str):

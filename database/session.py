@@ -20,12 +20,19 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # คอลัมน์ที่เพิ่มเข้ามาทีหลัง (ตารางเก่าที่สร้างไว้แล้วจะไม่ถูก create_all อัปเดตให้)
-_TRANSACTION_COLUMNS = {
-    "chat_id": "VARCHAR(50)",
-    "msg_id": "VARCHAR(50)",
-    "raw_caption": "VARCHAR(500)",
-    "receiver_names": "VARCHAR(300)",
-    "receiver_account": "VARCHAR(255)",
+_ADDED_COLUMNS = {
+    "transactions": {
+        "chat_id": "VARCHAR(50)",
+        "msg_id": "VARCHAR(50)",
+        "raw_caption": "VARCHAR(500)",
+        "receiver_names": "VARCHAR(300)",
+        "receiver_account": "VARCHAR(255)",
+        "caption_warning": "VARCHAR(200)",
+        "review_msg_id": "VARCHAR(50)",
+    },
+    "audit_logs": {
+        "actor": "VARCHAR(100)",
+    },
 }
 
 
@@ -34,14 +41,19 @@ def _ensure_columns():
     try:
         with engine.begin() as conn:
             inspector = inspect(conn)
-            if "transactions" not in inspector.get_table_names():
-                return
+            table_names = set(inspector.get_table_names())
 
-            existing_columns = {col["name"] for col in inspector.get_columns("transactions")}
-            for column_name, column_type in _TRANSACTION_COLUMNS.items():
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE transactions ADD COLUMN {column_name} {column_type}"))
-                    print(f"✅ Added missing column: transactions.{column_name}")
+            for table_name, columns in _ADDED_COLUMNS.items():
+                if table_name not in table_names:
+                    continue
+
+                existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+                for column_name, column_type in columns.items():
+                    if column_name not in existing_columns:
+                        conn.execute(
+                            text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                        )
+                        print(f"✅ Added missing column: {table_name}.{column_name}")
     except Exception as exc:
         print(f"⚠️ Could not ensure database columns: {exc}")
 

@@ -1,14 +1,15 @@
-﻿
-python-telegram-bot
-SQLAlchemy
-psycopg2-binary
+python-telegram-bot>=20.0,<22.0
+SQLAlchemy>=2.0,<3.0
+psycopg2-binary>=2.9,<3.0
 pyzbar==0.1.9
-Pillow
+Pillow>=10.0,<12.0
 python-dotenv==1.0.1
 requests==2.31.0
-gspread==6.1.0
-# --- Google Sheets & Drive ---
-gspread
-google-auth
-google-api-python-client
 apscheduler==3.10.4
+
+# --- Google Sheets & Drive ---
+# gspread 6 สลับลำดับพารามิเตอร์ worksheet.update() เป็น (values, range_name)
+# โค้ดเขียนตามแบบ 6 แล้ว ห้ามถอยกลับไป 5 และอย่าข้ามไป 7 โดยไม่ตรวจก่อน
+gspread>=6.0,<7.0
+google-auth>=2.0,<3.0
+google-api-python-client>=2.0,<3.0

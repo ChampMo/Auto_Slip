@@ -74,20 +74,26 @@ def extract_amount_from_qr_payload(qr_payload: str) -> float | None:
 
 
 def extract_bank_code_from_receiver_account(recv_acc: dict) -> str:
-    """Extract a 4-digit bank code from the receiver account payload if available."""
+    """ดึง 4 ตัวท้ายของเลขบัญชีผู้รับ เอาไปเทียบกับ ACCOUNT_MAPPING
+
+    ใช้เลขบัญชีเป็นหลักเสมอ เพราะ ACCOUNT_MAPPING เก็บ "4 ตัวท้ายของเลขบัญชี"
+    ส่วน bank.code คือรหัสธนาคาร (คนละความหมาย) จะใช้ก็ต่อเมื่อไม่มีเลขบัญชีมาให้เท่านั้น
+    """
     if not isinstance(recv_acc, dict):
         return ""
 
     bank_info = recv_acc.get("bank") or {}
-    if isinstance(bank_info, dict):
-        code = str(bank_info.get("code", "") or "").strip()
-        if re.fullmatch(r"\d{4}", code):
-            return code
+    if not isinstance(bank_info, dict):
+        return ""
 
-        account_value = str(bank_info.get("account", "") or "").strip()
-        if account_value:
-            digits = re.sub(r"\D", "", account_value)
-            return digits[-4:] if len(digits) >= 4 else digits
+    account_value = str(bank_info.get("account", "") or "").strip()
+    if account_value:
+        digits = re.sub(r"\D", "", account_value)
+        return digits[-4:] if len(digits) >= 4 else digits
+
+    code = str(bank_info.get("code", "") or "").strip()
+    if re.fullmatch(r"\d{4}", code):
+        return code
 
     return ""
 
@@ -106,7 +112,9 @@ def verify_slip(qr_payload: str) -> dict:
     }
     
     try:
-        response = requests.get(url, headers=headers, params=params)
+        # ต้องมี timeout เสมอ ไม่งั้นถ้า EasySlip ค้าง จะลากทั้งบอทค้างตามไปด้วย
+        # (connect 10 วิ, read 30 วิ)
+        response = requests.get(url, headers=headers, params=params, timeout=(10, 30))
         result = response.json()
         payload_amount = extract_amount_from_qr_payload(qr_payload)
         logger.info(
@@ -127,11 +135,12 @@ def verify_slip(qr_payload: str) -> dict:
             else:
                 amount = amount_data
             
-            # ดึงชื่อคนโอน
+            # ดึงชื่อคนโอน — บางธนาคารส่งมาแต่ชื่ออังกฤษ หรือส่ง th มาเป็นค่าว่าง
+            # ใช้ `or` แทน get(default) เพื่อให้ค่าว่างตกไปใช้ชื่ออังกฤษแทน
             sender = "Unknown"
             if "sender" in data and "account" in data["sender"] and "name" in data["sender"]["account"]:
-                name_data = data["sender"]["account"]["name"]
-                sender = name_data.get("th", name_data.get("en", "ไม่ระบุชื่อ"))
+                name_data = data["sender"]["account"]["name"] or {}
+                sender = name_data.get("th") or name_data.get("en") or "ไม่ระบุชื่อ"
             
             # 👇 --- เพิ่มโค้ดชุดนี้สำหรับดึงข้อมูล "ผู้รับ" ---
             receiver_info = "-"
@@ -193,6 +202,15 @@ def verify_slip(qr_payload: str) -> dict:
                 "payload_amount": payload_amount,
             }
             
+    except requests.exceptions.Timeout:
+        logger.warning("EasySlip verify timed out | payload_amount=%s", extract_amount_from_qr_payload(qr_payload))
+        return {
+            "success": False,
+            "error": "TIMEOUT",
+            "user_message": "Slip verification timed out. The EasySlip service did not respond in time.",
+            "payload_amount": extract_amount_from_qr_payload(qr_payload),
+        }
+
     except Exception as e:
         logger.exception("EasySlip verify exception | payload_amount=%s", extract_amount_from_qr_payload(qr_payload))
         return {

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 import threading
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any
 from zoneinfo import ZoneInfo
 
 from core.config import config
@@ -27,7 +27,23 @@ def get_bangkok_now() -> datetime:
 
 
 def get_sheet_name_for_datetime(dt: datetime) -> str:
+    """ชื่อแท็บรายวัน เช่น 04-08-2026"""
     return dt.astimezone(BANGKOK_TZ).strftime("%d-%m-%Y")
+
+
+def get_year_folder_name(dt: datetime) -> str:
+    """ชื่อโฟลเดอร์รายปีที่อยู่ใต้โฟลเดอร์หลัก เช่น Deposit-2026"""
+    return dt.astimezone(BANGKOK_TZ).strftime("Deposit-%Y")
+
+
+def get_month_file_name(dt: datetime) -> str:
+    """ชื่อไฟล์รายเดือนที่อยู่ในโฟลเดอร์รายปี เช่น check_08-2026"""
+    return dt.astimezone(BANGKOK_TZ).strftime("check_%m-%Y")
+
+
+def describe_expected_path(dt: datetime) -> str:
+    """เส้นทางเต็มที่ควรจะเป็น ใช้บอกคนอ่าน log/ข้อความแจ้งเตือน"""
+    return f"{get_year_folder_name(dt)}/{get_month_file_name(dt)}"
 
 
 @dataclass(frozen=True)
@@ -80,8 +96,6 @@ class GoogleSheetsService:
                 config.GOOGLE_CREDENTIALS, scopes=SCOPES
             )
             self.client = gspread.authorize(creds)
-            self._cached_month = None
-            self._cached_spreadsheet_id = None
             # bot เขียนสลิปจาก worker thread ส่วน scheduler สร้างชีทประจำวันจากอีกเธรด
             # ทั้งสองใช้ service ตัวเดียวกัน จึงต้องเข้าคิวกันไม่ให้คำนวณแถวถัดไปทับกัน
             # (RLock เพราะ append_to_sheet อาจเรียก create_today_sheet ต่อในเธรดเดียวกัน)
@@ -91,29 +105,37 @@ class GoogleSheetsService:
             logger.error(f"Failed to initialize Google Sheets Service: {e}")
             raise e
 
-    def _get_dynamic_spreadsheet(self) -> gspread.Spreadsheet:
-        """ค้นหาและ Caching ไฟล์ Spreadsheet ประจำเดือนผ่าน Drive"""
-        now = get_bangkok_now()
-        file_name = f"Slips_{now.strftime('%m-%Y')}"
+    def _get_dynamic_spreadsheet(self, target: datetime | None = None) -> gspread.Spreadsheet:
+        """ค้นหาไฟล์ Spreadsheet ประจำเดือนผ่าน Drive — ค้นใหม่ทุกครั้ง ไม่เก็บ ID ไว้ข้ามการเรียก
 
-        if (
-            self._cached_month != file_name
-            or not self._cached_spreadsheet_id
-        ):
-            logger.info(
-                f"Cache miss for month sheet. Searching file ID for: {file_name}"
+        ตั้งใจไม่ cache เพราะถ้าไฟล์ถูกลบแล้วสร้างใหม่ในชื่อเดิม ID เก่าจะยังเปิดได้
+        (Google เปิดไฟล์ที่อยู่ในถังขยะผ่าน ID ได้) แล้วข้อมูลจะไปลงไฟล์ที่ถูกลบแบบเงียบๆ
+        การค้นใหม่ทุกครั้งกรอง trashed = false อยู่แล้ว จึงไม่มีทางเขียนลงไฟล์ที่ถูกลบ
+
+        target คือวันที่ที่ต้องการ ไม่ใช่ 'วันนี้' เสมอไป — คืนวันสิ้นเดือนเราสร้างแท็บของ
+        วันพรุ่งนี้ ซึ่งต้องไปลงไฟล์ของเดือนถัดไป
+        """
+        now = target or get_bangkok_now()
+        folder_name = get_year_folder_name(now)
+        file_name = get_month_file_name(now)
+
+        logger.debug("Resolving sheet file: %s", describe_expected_path(now))
+
+        # ชั้นที่ 1: โฟลเดอร์รายปีใต้โฟลเดอร์หลัก
+        folder_id = drive_service.get_folder_id_by_name(folder_name)
+        if not folder_id:
+            raise gspread.exceptions.SpreadsheetNotFound(
+                f"ไม่พบโฟลเดอร์ '{folder_name}' ในโฟลเดอร์หลักของ Google Drive"
             )
-            sheet_id = drive_service.get_spreadsheet_id_by_name(file_name)
 
-            if not sheet_id:
-                raise gspread.exceptions.SpreadsheetNotFound(
-                    f"ไม่พบไฟล์ชื่อ '{file_name}' ใน Google Drive"
-                )
+        # ชั้นที่ 2: ไฟล์รายเดือนในโฟลเดอร์รายปี
+        sheet_id = drive_service.get_spreadsheet_id_by_name(file_name, folder_id)
+        if not sheet_id:
+            raise gspread.exceptions.SpreadsheetNotFound(
+                f"ไม่พบไฟล์ '{file_name}' ในโฟลเดอร์ '{folder_name}'"
+            )
 
-            self._cached_spreadsheet_id = sheet_id
-            self._cached_month = file_name
-
-        return self.client.open_by_key(self._cached_spreadsheet_id)
+        return self.client.open_by_key(sheet_id)
 
     @staticmethod
     def _parse_float(val: Any) -> float:
@@ -130,8 +152,29 @@ class GoogleSheetsService:
     SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
     SUMMARY_BANK_DROPDOWN_VALUES = BANK_DROPDOWN_VALUES
 
+    BASE_CELL_STYLE = {
+        "borders": {
+            "top": {"style": "SOLID"},
+            "bottom": {"style": "SOLID"},
+            "left": {"style": "SOLID"},
+            "right": {"style": "SOLID"},
+        },
+        "horizontalAlignment": "CENTER",
+        "verticalAlignment": "MIDDLE",
+    }
+
+    def _apply_row_style(self, worksheet: gspread.Worksheet, row_number: int):
+        """จัดรูปแบบเฉพาะแถวที่เพิ่งเขียน
+
+        ใช้แทนการจัดสีทั้งตารางทุกครั้ง ซึ่งกิน API หลายสิบครั้งต่อสลิป 1 ใบ
+        """
+        try:
+            worksheet.format(f"A{row_number}:AJ{row_number}", self.BASE_CELL_STYLE)
+        except Exception as e:
+            logger.error(f"Row style failed (row {row_number}): {e}", exc_info=True)
+
     def _apply_main_table_style(self, worksheet: gspread.Worksheet):
-        """จัดรูปแบบตารางหลัก A:AJ"""
+        """จัดรูปแบบตารางหลัก A:AJ (เรียกตอนสร้างแท็บใหม่เท่านั้น)"""
 
         try:
             last_row = max(
@@ -139,16 +182,7 @@ class GoogleSheetsService:
                 len(worksheet.col_values(16))
             )
 
-            base_style = {
-                "borders": {
-                    "top": {"style": "SOLID"},
-                    "bottom": {"style": "SOLID"},
-                    "left": {"style": "SOLID"},
-                    "right": {"style": "SOLID"},
-                },
-                "horizontalAlignment": "CENTER",
-                "verticalAlignment": "MIDDLE",
-            }
+            base_style = self.BASE_CELL_STYLE
 
             if last_row > 0:
                 worksheet.format(f"A1:AJ{last_row}", base_style)
@@ -530,11 +564,12 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Summary style failed: {e}", exc_info=True)
 
-    def _write_summary_tables(self, worksheet: gspread.Worksheet, customers: Dict[str, Dict[str, float]] | None = None):
-        """Write the summary tables into the sheet for new or updated daily sheets."""
-        if customers is None:
-            customers = {}
+    def _write_summary_tables(self, worksheet: gspread.Worksheet):
+        """เขียนตารางสรุป — เรียกตอนสร้างแท็บใหม่เท่านั้น
 
+        ทุกช่องเป็นสูตร SUMIF/COUNTIF ที่ Google คำนวณให้เองเมื่อมีข้อมูลเพิ่ม
+        จึงไม่ต้องเขียนซ้ำทุกครั้งที่มีสลิปเข้า และของที่แอดมินแก้เองในโซนนี้จะไม่ถูกทับ
+        """
         summary = [
             ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
             ["บัญชี", "We88", "12T", "Uwin THB", "Total"],
@@ -609,11 +644,6 @@ class GoogleSheetsService:
             ],
         ]
 
-        for name, data in customers.items():
-            if data["count"] >= 3:
-                summary.append([name, data["count"], data["total"]])
-
-        summary = [row + [""] * (3 - len(row)) for row in summary]
         max_rows = max(len(summary), len(bank_table), len(deposit_table))
 
         while len(summary) < max_rows:
@@ -629,27 +659,34 @@ class GoogleSheetsService:
         for i in range(max_rows):
             merged.append(summary[i] + bank_table[i] + deposit_table[i])
 
+        # gspread 6 รับ (values, range_name) — สลับลำดับจากเวอร์ชัน 5
         worksheet.update(
-            f"AK1:BC{len(merged)}",
             merged,
-            value_input_option="USER_ENTERED"
+            f"AK1:BC{len(merged)}",
+            value_input_option="USER_ENTERED",
         )
         self._apply_summary_dropdowns(worksheet)
 
-    def create_today_sheet(self):
-        """สร้างชีทของวันปัจจุบัน ถ้ายังไม่มี (เข้าคิวร่วมกับการเขียนสลิป)"""
+    def create_sheet_for(self, target: datetime | None = None):
+        """สร้างแท็บของวันที่ระบุ ถ้ายังไม่มี (ไม่ระบุ = วันนี้) เข้าคิวร่วมกับการเขียนสลิป"""
         with self._write_lock:
-            self._create_today_sheet_locked()
+            self._create_sheet_for_locked(target or get_bangkok_now())
 
-    def _create_today_sheet_locked(self):
-        spreadsheet = self._get_dynamic_spreadsheet()
-        bangkok_now = get_bangkok_now()
-        sheet_name = get_sheet_name_for_datetime(bangkok_now)
+    def create_today_sheet(self):
+        """สร้างแท็บของวันนี้"""
+        self.create_sheet_for()
+
+    def _create_sheet_for_locked(self, target: datetime, spreadsheet=None):
+        # เลือกไฟล์รายเดือนตามวันที่เป้าหมาย ไม่ใช่ตามวันที่ปัจจุบัน
+        # (ผู้เรียกที่ค้นไฟล์ไว้แล้วส่งต่อมาได้ จะได้ไม่ต้องค้น Drive ซ้ำ)
+        if spreadsheet is None:
+            spreadsheet = self._get_dynamic_spreadsheet(target)
+        sheet_name = get_sheet_name_for_datetime(target)
 
         logger.info(
             "🕒 Server now=%s | Bangkok now=%s | Creating sheet=%s",
             datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z"),
-            bangkok_now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            get_bangkok_now().strftime("%Y-%m-%d %H:%M:%S %Z"),
             sheet_name,
         )
         logger.info("💾 Bank dropdown values: %s", BANK_DROPDOWN_VALUES)
@@ -686,7 +723,7 @@ class GoogleSheetsService:
         while len(headers) < 55:
             headers.append("")
 
-        worksheet.update("A1:BC1", [headers])
+        worksheet.update([headers], "A1:BC1")
         logger.info("✅ Headers updated to sheet with %d columns", len(headers))
 
         # ใส่ Style
@@ -705,38 +742,6 @@ class GoogleSheetsService:
 
         logger.info(f"✅ สร้างชีท '{sheet_name}' สำเร็จ")
 
-    def update_daily_summary(self, worksheet: gspread.Worksheet):
-        records = worksheet.get_all_values()
-        if len(records) <= 1:
-            return
-
-        customers: Dict[str, Dict[str, float]] = {}
-
-        # วนลูปอ่านข้อมูลข้าม Header (Row 1)
-        for row in records[1:]:
-            # อ่านข้อมูลกลุ่ม VIP WE (L, M)
-            col_we_id = row[11] if len(row) > 11 else ""
-            col_we_amt = row[12] if len(row) > 12 else ""
-
-            # อ่านข้อมูลกลุ่ม VIP 12 (P, Q)
-            col_12_id = row[15] if len(row) > 15 else ""
-            col_12_amt = row[16] if len(row) > 16 else ""
-
-            # 💡 ดึง ID และ ยอดเงิน มาจากช่องที่มีข้อมูล (เนื่องจากมันจะถูกเติมแค่ฝั่งใดฝั่งหนึ่ง)
-            active_id = col_we_id if str(col_we_id).strip() else col_12_id
-            active_amt = col_we_amt if str(col_we_id).strip() else col_12_amt
-
-            if active_id and str(active_id).strip() != "-":
-                amt = self._parse_float(active_amt)
-
-                if active_id not in customers:
-                    customers[active_id] = {"count": 0, "total": 0.0}
-
-                customers[active_id]["count"] += 1
-                customers[active_id]["total"] += amt
-
-        self._write_summary_tables(worksheet, customers)
-
     def append_to_sheet(self, entry: SheetEntry) -> Tuple[bool, str]:
         """เพิ่มรายการใหม่ลงใน Sheet ประจำวัน (เขียนเฉพาะ 4 คอลัมน์ของกลุ่มตัวเอง)
 
@@ -750,15 +755,16 @@ class GoogleSheetsService:
         try:
             # กันไม่ให้สองการเขียนคำนวณแถวถัดไปได้เลขเดียวกันแล้วทับกัน
             with self._write_lock:
-                spreadsheet = self._get_dynamic_spreadsheet()
                 now = get_bangkok_now()
+                spreadsheet = self._get_dynamic_spreadsheet(now)
                 sheet_name = get_sheet_name_for_datetime(now)
 
                 # ดึง Worksheet ประจำวัน หรือสร้างใหม่ถ้ายังไม่มี
+                # (ยังถือ lock อยู่ จึงเรียกตัว _locked ตรงๆ ได้)
                 try:
                     worksheet = spreadsheet.worksheet(sheet_name)
                 except gspread.exceptions.WorksheetNotFound:
-                    self.create_today_sheet()
+                    self._create_sheet_for_locked(now, spreadsheet)
                     worksheet = spreadsheet.worksheet(sheet_name)
 
                 # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
@@ -799,17 +805,13 @@ class GoogleSheetsService:
                     update_range = f"L{next_row}:O{next_row}"
 
                 # 📝 สั่งเขียนข้อมูลลงไปเฉพาะ 4 ช่องของกลุ่มตัวเอง (ไม่ก้าวก่ายฝั่งตรงข้าม)
-                worksheet.update(update_range, [data_block])
+                # gspread 6 รับ (values, range_name) — สลับลำดับจากเวอร์ชัน 5
+                worksheet.update([data_block], update_range)
 
-                # สร้าง Dropdown ให้กับบรรทัดใหม่
+                # แต่งเฉพาะแถวใหม่ ไม่จัดสี/เขียนตารางสรุปใหม่ทั้งชีท
+                # (ตารางสรุปเป็นสูตร Google คำนวณให้เอง — เขียนซ้ำทุกใบเปลืองโควตาเปล่าๆ)
                 self._apply_agent_dropdowns_to_row(worksheet, next_row)
-
-                # 1. อัปเดต Summary รายวัน
-                self.update_daily_summary(worksheet)
-
-                self._apply_main_table_style(worksheet)
-
-                self._apply_summary_style(worksheet)
+                self._apply_row_style(worksheet, next_row)
 
             logger.info(
                 "✅ บันทึกข้อมูลลงชีทสำเร็จ | batch_id=%s | row=%s | range=%s",

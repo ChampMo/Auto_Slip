@@ -13,6 +13,8 @@ class Transaction(Base):
     chat_id = Column(String(50), nullable=True)
     msg_id = Column(String(50), nullable=True)
     raw_caption = Column(String(500), nullable=True)
+    # ข้อความที่มีปุ่ม Receive/Reject ติดอยู่ ใช้ตามไปปิดปุ่มตอนสลิปถูกตัดสินแล้ว
+    review_msg_id = Column(String(50), nullable=True)
 
     chat_user_id = Column(String(50), nullable=True)   # format แบบ "User : benz4455"
     chat_trans_id = Column(String(50), nullable=True)  # format แบบ "TRANS ID : 0000004"
@@ -20,6 +22,9 @@ class Transaction(Base):
 
     chat_bank = Column(String(50), nullable=True)
     chat_amount = Column(Float, nullable=True)
+    # ข้อความในแชทมีจุดที่เชื่อไม่ได้ (เช่น ตัวเลขบวกกันแล้วไม่ตรงกับผลรวมที่เขียนไว้)
+    # มีค่านี้เมื่อไหร่ = ห้าม auto receive/reject ต้องให้คนตัดสิน
+    caption_warning = Column(String(200), nullable=True)
 
     status = Column(String(20), default="pending")
 
@@ -38,9 +43,20 @@ class UsedQR(Base):
     batch_id = Column(String(100)) # โยงไปหาว่าอยู่ใน Transaction กลุ่มไหน
     api_raw_data = Column(String, nullable=True) # เก็บเป็นก้อน JSON Text
 
+class Approver(Base):
+    """คนที่กดปุ่ม Receive/Reject ได้ (นอกเหนือจากเจ้าของที่ตั้งไว้ใน .env)"""
+    __tablename__ = 'approvers'
+    user_id = Column(String(50), primary_key=True, index=True)
+    username = Column(String(100), nullable=True)      # เปลี่ยนได้ ใช้แค่แสดงผล
+    display_name = Column(String(100), nullable=True)
+    added_by = Column(String(100), nullable=True)
+    added_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class AuditLog(Base):
     __tablename__ = 'audit_logs'
     id = Column(Integer, primary_key=True, autoincrement=True)
     qr_ref = Column(String(100)) # ใช้เก็บ batch_id แทนในเวอร์ชันนี้
     action = Column(String(100))
+    actor = Column(String(100), nullable=True) # ใครเป็นคนกด (ว่าง = ระบบทำเอง)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
