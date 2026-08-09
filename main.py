@@ -1,4 +1,5 @@
 from core.config import config
+from core.version import CHANGELOG, __version__, describe_version
 from database.session import init_db
 from telegram.ext import (
     ApplicationBuilder,
@@ -16,6 +17,7 @@ from bot.commands import (
     help_command,
     myid_command,
     pending_command,
+    recheck_command,
     status_command,
     today_command,
 )
@@ -27,12 +29,14 @@ from bot.handlers import (
     load_approver_ids,
 )
 from bot.recovery import recover_interrupted_slips
+from services.easyslip import validate_company_accounts
 from scheduler import start_scheduler
 
 # รายการที่จะขึ้นในเมนูตอนพิมพ์ "/" ในแชท
 BOT_COMMANDS = [
     BotCommand("status", "How did this slip end? (reply to it)"),
     BotCommand("pending", "Slips still waiting for a decision"),
+    BotCommand("recheck", "Send a rejected slip back for checking (reply to it)"),
     BotCommand("today", "Today's totals"),
     BotCommand("health", "Check Drive, the sheet and scheduled jobs"),
     BotCommand("approvers", "Who can approve slips"),
@@ -58,13 +62,23 @@ async def on_shutdown(application) -> None:
 
 
 if __name__ == "__main__":
-    print("🚀 กำลังเริ่มต้นระบบ Slip Matching Bot...")
+    print(f"🚀 กำลังเริ่มต้นระบบ Slip Matching Bot {describe_version()}")
+    # ลิสต์สิ่งที่เปลี่ยนในรุ่นนี้ ไว้ยืนยันว่าไฟล์ที่อัปโหลดขึ้นมามีตัวแก้ที่ต้องการจริง
+    for change in CHANGELOG.get(__version__, []):
+        print(f"   • {change}")
 
     init_db()
 
     if not config.BOT_TOKEN:
         print("❌ ไม่พบ BOT_TOKEN ระบบไม่สามารถทำงานได้")
         exit()
+
+    # ตารางบัญชีตั้งผิด = เงินเข้าบัญชีนั้นจะถูกปฏิเสธเงียบๆ ต้องรู้ตั้งแต่ตอนบูต
+    account_problems = validate_company_accounts()
+    if account_problems:
+        print("⚠️ ตารางบัญชีบริษัทมีจุดที่ต้องดู:")
+        for problem in account_problems:
+            print(f"   • {problem}")
 
     approver_ids = load_approver_ids()
     owner_count = len(config.SLIP_APPROVER_IDS)
@@ -114,6 +128,7 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("pending", pending_command))
+    app.add_handler(CommandHandler("recheck", recheck_command))
     app.add_handler(CommandHandler("today", today_command))
     app.add_handler(CommandHandler("health", health_command))
     app.add_handler(CommandHandler("myid", myid_command))

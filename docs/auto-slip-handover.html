@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Slip — ใบส่งมอบงานและขอบเขต</title>
+</head>
+<body>
+<style>
+  :root {
+    --paper:#F4F5F2; --surface:#FFFFFF; --surface-2:#ECEEEA;
+    --ink:#17211F; --ink-soft:#3D4A47; --muted:#64726E;
+    --rule:#D2D7D2; --rule-soft:#E2E6E1;
+    --accent:#124E63; --accent-ink:#0C3A4A; --brass:#A8741A;
+    --good:#226B45; --good-bg:#E4EFE8;
+    --bad:#9C2F27;  --bad-bg:#F5E4E2;
+    --warn:#7E5810; --warn-bg:#F4EBD8;
+    --bar-bg:rgba(244,245,242,.92);
+    --font-sans:"Leelawadee UI","Sukhumvit Set","Noto Sans Thai","Thonburi",
+                -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --font-mono:"Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,
+                "DejaVu Sans Mono","Leelawadee UI",monospace;
+    --t-xs:.75rem; --t-sm:.8125rem; --t-md:1.0625rem;
+    --t-lg:1.3125rem; --t-xl:1.75rem; --t-2xl:2.25rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#0F1618; --surface:#16201F; --surface-2:#1D2827;
+      --ink:#E4E9E7; --ink-soft:#C2CCC9; --muted:#8E9C98;
+      --rule:#2C3937; --rule-soft:#232E2D;
+      --accent:#63B4CD; --accent-ink:#8ACBE0; --brass:#D3A44E;
+      --good:#64BE8D; --good-bg:#163024;
+      --bad:#E4837A;  --bad-bg:#33201E;
+      --warn:#D3A44E; --warn-bg:#302716;
+      --bar-bg:rgba(15,22,24,.92);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0F1618; --surface:#16201F; --surface-2:#1D2827;
+    --ink:#E4E9E7; --ink-soft:#C2CCC9; --muted:#8E9C98;
+    --rule:#2C3937; --rule-soft:#232E2D;
+    --accent:#63B4CD; --accent-ink:#8ACBE0; --brass:#D3A44E;
+    --good:#64BE8D; --good-bg:#163024;
+    --bad:#E4837A;  --bad-bg:#33201E;
+    --warn:#D3A44E; --warn-bg:#302716;
+    --bar-bg:rgba(15,22,24,.92);
+  }
+  :root[data-theme="light"] {
+    --paper:#F4F5F2; --surface:#FFFFFF; --surface-2:#ECEEEA;
+    --ink:#17211F; --ink-soft:#3D4A47; --muted:#64726E;
+    --rule:#D2D7D2; --rule-soft:#E2E6E1;
+    --accent:#124E63; --accent-ink:#0C3A4A; --brass:#A8741A;
+    --good:#226B45; --good-bg:#E4EFE8;
+    --bad:#9C2F27;  --bad-bg:#F5E4E2;
+    --warn:#7E5810; --warn-bg:#F4EBD8;
+    --bar-bg:rgba(244,245,242,.92);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-sans); line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .topbar {
+    position:sticky; top:0; z-index:20;
+    background:var(--bar-bg);
+    -webkit-backdrop-filter:saturate(180%) blur(8px);
+    backdrop-filter:saturate(180%) blur(8px);
+    border-bottom:1px solid var(--rule-soft);
+  }
+  .topbar-inner {
+    max-width:900px; margin:0 auto; padding:.55rem 1.5rem;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  }
+  .brand { display:inline-flex; align-items:center; gap:.55rem; min-width:0; }
+  .brand-mark { width:17px; height:17px; flex:none; color:var(--brass); }
+  .brand-name {
+    font-family:var(--font-mono); font-size:var(--t-xs);
+    letter-spacing:.15em; text-transform:uppercase;
+    font-weight:700; color:var(--ink); white-space:nowrap;
+  }
+  .brand-sep { width:1px; height:13px; background:var(--rule); flex:none; }
+  .brand-kind {
+    font-size:var(--t-xs); color:var(--muted); letter-spacing:.04em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .icon-btn {
+    display:inline-flex; align-items:center; gap:.4rem;
+    border:1px solid var(--rule); background:var(--surface); color:var(--ink-soft);
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.1em;
+    padding:.3rem .6rem; cursor:pointer; line-height:1.6;
+  }
+  .icon-btn svg { width:13px; height:13px; flex:none; }
+  .icon-btn:hover { color:var(--accent); }
+  .icon-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .icon-moon { display:none; }
+  :root[data-theme="dark"] .icon-sun { display:none; }
+  :root[data-theme="dark"] .icon-moon { display:inline; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .icon-sun { display:none; }
+    :root:not([data-theme="light"]) .icon-moon { display:inline; }
+  }
+  @media (max-width:560px) { .brand-sep, .brand-kind { display:none; } }
+
+  .wrap { max-width:900px; margin:0 auto; padding:0 1.5rem 5rem; }
+
+  .masthead { border-bottom:2px solid var(--ink); padding:3rem 0 1.25rem; margin-bottom:2rem; }
+  .masthead h1 {
+    font-size:var(--t-2xl); line-height:1.15; letter-spacing:-.02em;
+    font-weight:700; margin:0 0 .5rem; text-wrap:balance;
+  }
+  .masthead p { margin:0; color:var(--ink-soft); max-width:60ch; }
+
+  .docmeta {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:1px; background:var(--rule); border:1px solid var(--rule); margin:1.75rem 0 0;
+  }
+  .docmeta div { background:var(--surface); padding:.75rem .95rem; }
+  .docmeta dt {
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.2rem;
+  }
+  .docmeta dd { margin:0; font-size:var(--t-sm); font-weight:600; }
+
+  section { scroll-margin-top:4rem; }
+  h2 {
+    font-size:var(--t-lg); font-weight:700; letter-spacing:-.01em;
+    margin:3rem 0 .5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+    text-wrap:balance;
+  }
+  h2 .n {
+    font-family:var(--font-mono); font-size:var(--t-xs); color:var(--brass);
+    letter-spacing:.14em; display:block; margin-bottom:.3rem; font-weight:400;
+  }
+  h3 { font-size:var(--t-md); font-weight:700; margin:1.75rem 0 .5rem; }
+  p { margin:0 0 1rem; max-width:70ch; }
+  .note { font-size:var(--t-sm); color:var(--muted); }
+  code {
+    font-family:var(--font-mono); font-size:.9em; background:var(--surface-2);
+    padding:.1em .35em; color:var(--accent-ink);
+  }
+
+  ul.tight, ol.tight { margin:0 0 1rem; padding-left:1.2rem; max-width:70ch; }
+  ul.tight li, ol.tight li { margin-bottom:.4rem; }
+
+  .table-scroll { overflow-x:auto; margin:1rem 0 1.5rem; }
+  table { border-collapse:collapse; width:100%; min-width:460px; font-size:var(--t-sm); }
+  th, td {
+    text-align:left; padding:.6rem .85rem .6rem 0;
+    border-bottom:1px solid var(--rule-soft); vertical-align:top;
+  }
+  thead th {
+    border-bottom:1.5px solid var(--ink); font-size:var(--t-xs);
+    letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    font-weight:600; white-space:nowrap;
+  }
+  tbody tr:last-child td { border-bottom:1px solid var(--rule); }
+
+  .stamp {
+    display:inline-block; font-family:var(--font-mono); font-size:10px;
+    letter-spacing:.12em; text-transform:uppercase; padding:.18rem .45rem;
+    border:1px solid currentColor; line-height:1.4; font-weight:600;
+  }
+  .stamp[data-tone="good"] { color:var(--good); background:var(--good-bg); }
+  .stamp[data-tone="bad"]  { color:var(--bad);  background:var(--bad-bg); }
+  .stamp[data-tone="warn"] { color:var(--warn); background:var(--warn-bg); }
+
+  .callout {
+    border:1px solid var(--rule); border-top:3px solid var(--warn);
+    background:var(--surface); padding:1.1rem 1.2rem 1.2rem; margin:1.5rem 0;
+  }
+  .callout[data-tone="bad"] { border-top-color:var(--bad); }
+  .callout h3 { margin:.45rem 0 .5rem; }
+  .callout p:last-child { margin-bottom:0; }
+
+  /* ช่องเติมข้อมูลที่ต้องกรอกก่อนส่ง */
+  .fill {
+    display:inline-block; min-width:11rem;
+    border-bottom:1px dashed var(--brass); color:var(--brass);
+    font-family:var(--font-mono); font-size:.9em;
+  }
+
+  .sign {
+    display:grid; grid-template-columns:1fr; gap:2.5rem;
+    margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--rule);
+  }
+  @media (min-width:620px) { .sign { grid-template-columns:1fr 1fr; gap:3rem; } }
+  .sign-box { padding-top:3.5rem; border-top:1px solid var(--ink); }
+  .sign-box .role {
+    font-family:var(--font-mono); font-size:var(--t-xs);
+    letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  }
+  .sign-box .line { margin-top:.4rem; font-size:var(--t-sm); color:var(--ink-soft); }
+
+  footer { margin-top:4rem; padding-top:1.25rem; border-top:2px solid var(--ink);
+           font-size:var(--t-sm); color:var(--muted); }
+
+  @media print {
+    body { background:#fff; }
+    .topbar { display:none; }
+    h2 { break-after:avoid; }
+    .callout, .sign-box { break-inside:avoid; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" aria-hidden="true">
+        <rect x="2" y="2" width="7" height="7"/>
+        <rect x="15" y="2" width="7" height="7"/>
+        <rect x="2" y="15" width="7" height="7"/>
+        <rect x="15" y="15" width="3" height="3" fill="currentColor" stroke="none"/>
+        <rect x="19" y="19" width="3" height="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="brand-name">Auto Slip</span>
+      <span class="brand-sep" aria-hidden="true"></span>
+      <span class="brand-kind">ใบส่งมอบงาน · Deposit Check</span>
+    </span>
+    <button type="button" class="icon-btn" id="theme-toggle" aria-label="สลับธีม">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+      <span>ธีม</span>
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>ใบส่งมอบงานและขอบเขต</h1>
+    <p>
+      ระบบตรวจสลิปเงินเข้าอัตโนมัติ Auto Slip — สรุปสิ่งที่ส่งมอบ ขอบเขตที่ตกลงกัน
+      สิ่งที่อยู่นอกขอบเขต และเงื่อนไขการดูแลหลังส่งมอบ
+    </p>
+    <dl class="docmeta">
+      <div><dt>โปรเจกต์</dt><dd>Auto Slip · Deposit Check</dd></div>
+      <div><dt>เวอร์ชัน</dt><dd>1.4.2 (2026-08-09)</dd></div>
+      <div><dt>ผู้ส่งมอบ</dt><dd><span class="fill">[ชื่อผู้พัฒนา]</span></dd></div>
+      <div><dt>ผู้รับมอบ</dt><dd><span class="fill">[ชื่อลูกค้า]</span></dd></div>
+      <div><dt>วันที่ส่งมอบ</dt><dd><span class="fill">[วันที่]</span></dd></div>
+    </dl>
+  </header>
+
+  <div class="callout">
+    <span class="stamp" data-tone="warn">อ่านก่อนส่ง</span>
+    <h3>เอกสารนี้ยังต้องกรอกข้อมูลก่อนใช้จริง</h3>
+    <p style="margin-bottom:0">
+      ทุกช่องที่เป็น <span class="fill">[แบบนี้]</span> ต้องเติมก่อนส่งให้ลูกค้า
+      โดยเฉพาะ <b>หัวข้อ 7 การรับประกันและการดูแลต่อ</b> ซึ่งเป็นเงื่อนไขทางการค้า
+      ตัวเลขและระยะเวลาที่ใส่ไว้เป็นเพียงตัวอย่างให้แก้ ไม่ใช่ข้อตกลงที่มีอยู่แล้ว
+    </p>
+  </div>
+
+  <section>
+    <h2><span class="n">หัวข้อ 1</span>สิ่งที่ส่งมอบ</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th style="width:1%">รายการ</th><th>รายละเอียด</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>ระบบที่ติดตั้งแล้ว</b></td>
+            <td>บอท Telegram พร้อมฐานข้อมูล ทำงานอยู่บนเซิร์ฟเวอร์ เชื่อมกับกลุ่ม VIP_WE และ VIP_12 และเขียนลง Google Sheets ได้จริง</td>
+          </tr>
+          <tr>
+            <td><b>ซอร์สโค้ด</b></td>
+            <td>โค้ดทั้งหมดใน Git repository พร้อมไฟล์ตั้งค่าตัวอย่าง โอนสิทธิ์ให้ผู้รับมอบ</td>
+          </tr>
+          <tr>
+            <td><b>คู่มือใช้งาน</b></td>
+            <td>เอกสาร work flow และวิธีใช้งานสำหรับทีมที่ใช้ในกลุ่ม Telegram (ไทย/อังกฤษ)</td>
+          </tr>
+          <tr>
+            <td><b>สคริปต์สำรองข้อมูล</b></td>
+            <td><code>backup.sh</code> สำรองรายวันพร้อมตรวจความถูกต้อง และ <code>restore.sh</code> สำหรับกู้คืน มีโหมดทดสอบว่าไฟล์สำรองใช้ได้จริงโดยไม่แตะข้อมูลจริง</td>
+          </tr>
+          <tr>
+            <td><b>ชุดทดสอบ</b></td>
+            <td>ชุดทดสอบอัตโนมัติ 20 ชุด ครอบคลุมการอ่านข้อความ การจับคู่บัญชี การกันกดซ้ำ การกู้คืนเมื่อระบบดับ และการเขียนชีท</td>
+          </tr>
+          <tr>
+            <td><b>บัญชีและสิทธิ์เข้าถึง</b></td>
+            <td>ตามรายการในหัวข้อ 6 — ส่งมอบผ่านช่องทางที่ปลอดภัย ไม่อยู่ในเอกสารนี้</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 2</span>ขอบเขตงานที่ส่งมอบ</h2>
+    <p>ระบบทำสิ่งต่อไปนี้ได้ครบถ้วนแล้ว</p>
+
+    <h3>การรับและตรวจสลิป</h3>
+    <ul class="tight">
+      <li>รับรูปสลิปจากกลุ่ม Telegram ที่ลงทะเบียนไว้ 2 กลุ่ม ทั้งรูปปกติและรูปที่ส่งเป็นไฟล์</li>
+      <li>อ่าน QR code ได้หลายดวงต่อรูป และรับหลายรูปในข้อความเดียว โดยรวมยอดให้</li>
+      <li>อ่านข้อมูลจากข้อความกำกับหลายรูปแบบ — รหัสรายการ ชื่อผู้ใช้ ชื่อผู้โอน และยอดเงิน รวมถึงยอดที่เขียนเป็นการบวก</li>
+      <li>ยืนยันสลิปกับธนาคารผ่าน EasySlip เพื่อดึงชื่อผู้โอน ยอดจริง และบัญชีผู้รับ</li>
+      <li>กันสลิปซ้ำระดับรายใบ จำ QR ทุกใบที่เคยผ่านระบบ ไม่ว่าส่งจากกลุ่มไหน</li>
+    </ul>
+
+    <h3>การตัดสินและบันทึก</h3>
+    <ul class="tight">
+      <li>รับอัตโนมัติเมื่อผ่านครบ 3 ข้อ — ชื่อผู้โอน ยอดเงิน และบัญชีผู้รับ</li>
+      <li>ปฏิเสธอัตโนมัติเมื่อยอดเงินหรือบัญชีผู้รับไม่ตรง พร้อมแจ้งเหตุผลกลับเข้ากลุ่ม</li>
+      <li>ขึ้นปุ่มให้คนตัดสินในกรณีที่ข้อมูลไม่พอหรือเชื่อไม่ได้ เช่น หลายสลิปในชุดเดียว ตรวจกับธนาคารไม่สำเร็จ หรือตัวเลขในข้อความขัดแย้งกันเอง</li>
+      <li>จับคู่บัญชีผู้รับด้วยการเทียบเลขบัญชีทีละตำแหน่ง รองรับทุกธนาคารโดยไม่ต้องตั้งค่าแยก และไม่เดาเมื่อข้อมูลไม่พอชี้ชัด</li>
+      <li>บันทึกลง Google Sheets แยกไฟล์รายเดือน แยกแท็บรายวัน สร้างแท็บวันถัดไปให้ล่วงหน้าอัตโนมัติ</li>
+    </ul>
+
+    <h3>สิทธิ์ ความปลอดภัย และการตรวจสอบย้อนหลัง</h3>
+    <ul class="tight">
+      <li>เฉพาะผู้ที่อยู่ในรายชื่อผู้อนุมัติเท่านั้นที่กดปุ่มได้ — แอดมินกลุ่มไม่ได้สิทธิ์อัตโนมัติ</li>
+      <li>ผู้อนุมัติเพิ่มหรือถอนสิทธิ์คนอื่นได้เองผ่านคำสั่ง โดยมีเจ้าของระบบเป็นกุญแจสำรองที่ถอนไม่ได้</li>
+      <li>บันทึกทุกการกระทำว่าใครทำอะไรเมื่อไหร่ ตรวจย้อนได้ด้วยคำสั่ง</li>
+      <li>ป้องกันการกดพร้อมกันหลายคน ไม่มีทางบันทึกซ้ำ</li>
+      <li>กู้รายการที่ค้างอัตโนมัติเมื่อระบบกลับมาหลังดับกลางคัน พร้อมแจ้งเข้ากลุ่ม</li>
+    </ul>
+
+    <h3>คำสั่งสำหรับใช้งานและตรวจสอบ</h3>
+    <ul class="tight">
+      <li><code>/status</code> <code>/myid</code> <code>/help</code> — ใครก็ใช้ได้</li>
+      <li><code>/pending</code> <code>/today</code> <code>/health</code> <code>/approvers</code> <code>/approver_add</code> <code>/approver_remove</code> — เฉพาะผู้อนุมัติ</li>
+      <li>แจ้งเตือนเข้ากลุ่มล่วงหน้า 2 ชั่วโมงก่อนขึ้นเดือนใหม่ ถ้ายังไม่มีไฟล์ชีทของเดือนถัดไป</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 3</span>สิ่งที่อยู่นอกขอบเขต</h2>
+    <p>
+      รายการต่อไปนี้ <b>ไม่รวม</b> อยู่ในงานที่ส่งมอบ หากต้องการเพิ่มภายหลัง
+      ถือเป็นงานใหม่ที่ต้องประเมินราคาแยก
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>รายการ</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>สลิปที่เป็นไฟล์ PDF</b></td>
+            <td>ระบบอ่าน QR จากไฟล์ภาพเท่านั้น ต้องส่งเป็นรูป</td>
+          </tr>
+          <tr>
+            <td><b>การสร้างไฟล์ Google Sheets รายเดือน</b></td>
+            <td>บัญชีที่ระบบใช้เชื่อม Google ไม่มีพื้นที่เก็บไฟล์ จึงสร้างไฟล์เองไม่ได้ตามข้อจำกัดของ Google — ต้องมีคนสร้างให้ (ดูหัวข้อ 4)</td>
+          </tr>
+          <tr>
+            <td><b>กลุ่ม Telegram อื่นนอกจากที่ลงทะเบียนไว้</b></td>
+            <td>รองรับ VIP_WE และ VIP_12 การเพิ่มกลุ่มต้องแก้ตั้งค่าและทดสอบใหม่</td>
+          </tr>
+          <tr>
+            <td><b>หน้าเว็บหรือแดชบอร์ด</b></td>
+            <td>ใช้งานผ่าน Telegram และดูข้อมูลใน Google Sheets</td>
+          </tr>
+          <tr>
+            <td><b>การถอนเงินหรือรายการขาออก</b></td>
+            <td>ระบบครอบคลุมเฉพาะสลิปเงินเข้า</td>
+          </tr>
+          <tr>
+            <td><b>ค่าบริการภายนอก</b></td>
+            <td>ค่า EasySlip ค่าเซิร์ฟเวอร์ และค่าบริการ Google ผู้รับมอบเป็นผู้รับผิดชอบ</td>
+          </tr>
+          <tr>
+            <td><b>การแก้ไขเมื่อผู้ให้บริการภายนอกเปลี่ยนแปลง</b></td>
+            <td>หาก Telegram, EasySlip หรือ Google เปลี่ยนวิธีเชื่อมต่อในอนาคต การปรับให้เข้ากันถือเป็นงานดูแล (ดูหัวข้อ 7)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 4</span>สิ่งที่ผู้รับมอบต้องทำเอง</h2>
+
+    <div class="callout" data-tone="bad">
+      <span class="stamp" data-tone="bad">ทุกเดือน</span>
+      <h3>สร้างไฟล์ชีทของเดือนใหม่ก่อนขึ้นเดือน</h3>
+      <p>
+        สร้างไฟล์ Google Sheets ชื่อ <code>check_MM-YYYY</code> ของเดือนถัดไป
+        แล้ววางในโฟลเดอร์ <code>Deposit-YYYY</code> ของปีนั้น
+        ไม่ต้องแชร์ไฟล์ใหม่ เพราะสิทธิ์ตกทอดมาจากโฟลเดอร์หลักที่แชร์ไว้ตอนติดตั้งแล้ว
+      </p>
+      <p style="margin-bottom:0">
+        ระบบจะแจ้งเตือนเข้ากลุ่มล่วงหน้า 2 ชั่วโมงถ้ายังไม่มีไฟล์
+        และตรวจสถานะได้ตลอดด้วยคำสั่ง <code>/health</code> —
+        <b>ถ้าไม่มีไฟล์ ระบบจะบันทึกไม่ได้ทั้งวัน</b>
+      </p>
+    </div>
+
+    <h3>งานดูแลตามรอบ</h3>
+    <ul class="tight">
+      <li><b>ต่ออายุแพ็กเกจ EasySlip</b> ก่อนหมดอายุหรือโควตาหมด — ถ้าหมด ระบบจะตรวจสลิปกับธนาคารไม่ได้ และทุกใบจะต้องให้คนกดยืนยันเอง</li>
+      <li><b>ตรวจว่าไฟล์สำรองข้อมูลยังทำงาน</b> อย่างน้อยเดือนละครั้ง ด้วยคำสั่ง <code>restore.sh --check</code> ซึ่งทดสอบกู้คืนโดยไม่แตะข้อมูลจริง</li>
+      <li><b>ดูแลบัญชีเซิร์ฟเวอร์และค่าบริการ</b> ให้ไม่ขาดต่อ</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 5</span>รายการที่ยังค้าง</h2>
+    <div class="callout" data-tone="good">
+      <span class="stamp" data-tone="good">ครบแล้ว</span>
+      <h3>ไม่มีรายการค้าง</h3>
+      <p style="margin-bottom:0">
+        บัญชีรับเงินของบริษัทลงทะเบียนครบทั้ง <b>19 บัญชี</b>
+        และระบบจับคู่อัตโนมัติได้ทุกบัญชี
+      </p>
+    </div>
+    <p class="note">
+      หากมีบัญชีใหม่เพิ่มภายหลัง แก้ได้ที่ตารางบัญชีในไฟล์ตั้งค่าของระบบที่เดียว
+      แล้วรีสตาร์ทหนึ่งครั้ง — ทั้งการจับคู่อัตโนมัติและปุ่มให้เลือกบัญชีใช้ตารางเดียวกัน
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 6</span>บัญชีและสิทธิ์ที่ต้องส่งมอบ</h2>
+    <p>
+      รายการด้านล่างคือสิ่งที่ต้องโอนให้ผู้รับมอบเป็นเจ้าของ
+      <b>ค่ารหัสผ่านและคีย์ทั้งหมดส่งแยกผ่านช่องทางที่ปลอดภัย ไม่อยู่ในเอกสารนี้</b>
+      และควรเปลี่ยนรหัสทั้งหมดหลังรับมอบเรียบร้อย
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>สิ่งที่ต้องโอน</th><th>ผู้ถือปัจจุบัน</th><th>โอนแล้ว</th></tr></thead>
+        <tbody>
+          <tr><td>เซิร์ฟเวอร์ (DigitalOcean droplet) และบัญชีที่ผูกไว้</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>บอท Telegram และโทเคน (สร้างจาก BotFather)</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>บัญชีและคีย์ EasySlip</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>Google Cloud project และไฟล์ <code>credentials.json</code></td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>สิทธิ์เจ้าของโฟลเดอร์ <code>Deposit check</code> ใน Google Drive</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>Git repository ของซอร์สโค้ด</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+          <tr><td>รหัสผ่านฐานข้อมูลและ pgAdmin</td><td><span class="fill">[  ]</span></td><td><span class="fill">[  ]</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 7</span>การรับประกันและการดูแลต่อ</h2>
+
+    <div class="callout">
+      <span class="stamp" data-tone="warn">ต้องตกลงกันก่อน</span>
+      <h3>ตัวเลขในหัวข้อนี้เป็นเพียงตัวอย่าง</h3>
+      <p style="margin-bottom:0">
+        ระยะเวลาและอัตราค่าบริการด้านล่างใส่ไว้เป็นแนวทาง
+        ต้องแก้ให้ตรงกับที่ตกลงกันจริงก่อนส่งเอกสารนี้ให้ลูกค้า
+      </p>
+    </div>
+
+    <h3>การรับประกัน</h3>
+    <p>
+      รับประกันการแก้ไขข้อบกพร่องเป็นเวลา <span class="fill">[30 วัน]</span>
+      นับจากวันส่งมอบ โดยไม่มีค่าใช้จ่าย
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>อยู่ในการรับประกัน</th><th>ไม่อยู่ในการรับประกัน</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>
+              ระบบทำงานไม่ตรงกับขอบเขตในหัวข้อ 2<br>
+              ข้อผิดพลาดที่ทำให้บันทึกข้อมูลผิดหรือไม่บันทึก<br>
+              ระบบหยุดทำงานจากข้อบกพร่องของโค้ด
+            </td>
+            <td>
+              ความต้องการที่เปลี่ยนไปจากหัวข้อ 2<br>
+              ปัญหาจากผู้ให้บริการภายนอก เช่น คีย์หมดอายุ โควตาหมด บริการล่ม<br>
+              ปัญหาจากการตั้งค่าหรือใช้งานผิด เช่น ไม่ได้สร้างไฟล์ชีทรายเดือน<br>
+              การเพิ่มความสามารถใหม่
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>บริการดูแลรายเดือน (ทางเลือก)</h3>
+    <p>
+      หลังหมดระยะรับประกัน แนะนำให้มีสัญญาดูแลต่อ เนื่องจากระบบพึ่งพาบริการภายนอก 3 เจ้า
+      ที่เปลี่ยนแปลงได้ตลอดเวลา และมีงานที่ต้องตรวจสอบเป็นรอบ
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>รายการ</th><th>รายละเอียด</th></tr></thead>
+        <tbody>
+          <tr><td><b>ค่าบริการ</b></td><td><span class="fill">[8,000–15,000 บาท/เดือน]</span></td></tr>
+          <tr><td><b>ครอบคลุม</b></td><td>ตรวจสุขภาพระบบและไฟล์สำรอง แก้ไขเมื่อบริการภายนอกเปลี่ยนแปลง แก้ข้อบกพร่องที่พบใหม่ และให้คำปรึกษาการใช้งาน</td></tr>
+          <tr><td><b>เวลาตอบกลับ</b></td><td><span class="fill">[ภายใน 1 วันทำการ]</span></td></tr>
+          <tr><td><b>งานพัฒนาเพิ่ม</b></td><td>คิดแยกตามชั่วโมง <span class="fill">[1,500 บาท/ชม.]</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 8</span>การตรวจรับ</h2>
+    <p>
+      ผู้รับมอบได้ตรวจสอบระบบตามขอบเขตในหัวข้อ 2 และรับทราบเงื่อนไขในหัวข้อ 3 ถึง 7 แล้ว
+    </p>
+    <div class="sign">
+      <div class="sign-box">
+        <div class="role">ผู้ส่งมอบ</div>
+        <div class="line">ชื่อ ......................................................</div>
+        <div class="line">วันที่ ....................................................</div>
+      </div>
+      <div class="sign-box">
+        <div class="role">ผู้รับมอบ</div>
+        <div class="line">ชื่อ ......................................................</div>
+        <div class="line">วันที่ ....................................................</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p style="margin:0">
+      Auto Slip · ใบส่งมอบงานและขอบเขต · ใช้ควบคู่กับคู่มือใช้งานระบบ
+    </p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var KEY = "autoslip-theme";
+
+  function recall() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function remember(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* storage ถูกปิด */ } }
+
+  var saved = recall();
+  if (saved === "dark" || saved === "light") root.dataset.theme = saved;
+
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    var current = root.dataset.theme ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = current === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    remember(next);
+  });
+})();
+</script>
+
+</body>
+</html>

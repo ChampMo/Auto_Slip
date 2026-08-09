@@ -1,6 +1,6 @@
 from sqlalchemy import update
 from sqlalchemy.orm import Session
-from database.models import Approver, AuditLog, Transaction
+from database.models import ACTION_MAX, Approver, AuditLog, Transaction, clamp
 
 # action ที่ถือว่า batch นี้ถูกล็อกไว้แล้ว (กำลังบันทึก / บันทึกเสร็จแล้ว)
 SHEET_LOCK_ACTIONS = ['saving_started', 'sheet_saved']
@@ -8,7 +8,9 @@ SHEET_LOCK_ACTIONS = ['saving_started', 'sheet_saved']
 SHEET_REOPEN_ACTION = 'batch_reopened'
 
 # สถานะที่ถือว่ามีคนตัดสินไปแล้ว ห้ามใครมาเปลี่ยนทับ
-DECIDED_STATUSES = ['Receive', 'Reject']
+# Duplicate = คนยืนยันว่าเป็นใบที่บันทึกไปแล้ว ถือว่าตัดสินแล้วเหมือนกัน
+# จงใจไม่ใส่ไว้ใน REJECTED_STATUSES เพราะไม่ควรปลดล็อกให้ส่งใบเดิมเข้ามาอีก
+DECIDED_STATUSES = ['Receive', 'Reject', 'Duplicate']
 
 
 def get_approver_ids(db: Session) -> set:
@@ -107,7 +109,12 @@ def add_audit_log(db: Session, qr_ref: str, action: str, actor: str = None):
 
     actor = คนที่กดปุ่ม ถ้าไม่ระบุแปลว่าระบบทำเอง (auto receive/reject)
     """
-    log = AuditLog(qr_ref=qr_ref, action=action, actor=actor)
+    # ตัดให้พอดีคอลัมน์ก่อนเสมอ — ประวัติที่ยาวเกินไม่ควรทำให้ทั้งรายการล้ม
+    log = AuditLog(
+        qr_ref=clamp(qr_ref, 100),
+        action=clamp(action, ACTION_MAX),
+        actor=clamp(actor, 100),
+    )
     db.add(log)
     db.commit()
 

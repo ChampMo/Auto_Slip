@@ -1,5 +1,4 @@
-version: '3.8'
-
+# ไม่ต้องมี version: อีกแล้ว — Docker Compose รุ่นใหม่เลิกใช้และจะเตือนทุกครั้งที่รัน
 services:
   db:
     image: postgres:15-alpine

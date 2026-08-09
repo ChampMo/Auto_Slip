@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -8,18 +7,22 @@ from apscheduler.triggers.cron import CronTrigger
 from core.matcher import GROUP_CATEGORY
 from services.gdrive import drive_service
 from services.gsheets import (
+    BANGKOK_TZ,
+    BUSINESS_DAY_STARTS_AT,
+    BUSINESS_TZ,
     describe_expected_path,
-    get_bangkok_now,
+    get_business_now,
     get_month_file_name,
     get_year_folder_name,
     sheets_service,
+    to_bangkok_clock,
 )
 from services.notifier import send_telegram_message
 
 
 def create_today_sheet() -> None:
     """สร้างแท็บของวันนี้ (ใช้ตอนบอทเพิ่งบูต)"""
-    sheets_service.create_sheet_for(get_bangkok_now())
+    sheets_service.create_sheet_for(get_business_now())
 
 
 def create_next_day_sheet() -> None:
@@ -28,7 +31,7 @@ def create_next_day_sheet() -> None:
     คืนวันสิ้นเดือน 'พรุ่งนี้' จะอยู่คนละไฟล์กับวันนี้ ตัว create_sheet_for จัดการให้แล้ว
     แต่ไฟล์ของเดือนถัดไปต้องถูกสร้างไว้ก่อน ไม่งั้นงานนี้จะล้ม
     """
-    target = get_bangkok_now() + timedelta(days=1)
+    target = get_business_now() + timedelta(days=1)
     try:
         sheets_service.create_sheet_for(target)
     except Exception as exc:
@@ -41,8 +44,14 @@ def create_next_day_sheet() -> None:
         )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# httpx log URL เต็มของทุก request ซึ่งมี bot token อยู่ในนั้น
+# บอท poll ทุก 10 วินาที = token ถูกเขียนลง log ตลอด 24 ชม.
+# ปิดไว้ที่ WARNING ให้ยังเห็นตอนเรียก API ไม่สำเร็จ แต่ไม่รั่ว token ตอนปกติ
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
-BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 
 def warn_if_next_month_file_missing() -> None:
@@ -51,7 +60,7 @@ def warn_if_next_month_file_missing() -> None:
     รัน 22:00 ของวันสุดท้ายของเดือน (2 ชั่วโมงก่อนขึ้นเดือนใหม่)
     ถ้ามีไฟล์อยู่แล้วจะเงียบ ไม่รบกวนกลุ่ม
     """
-    next_month = get_bangkok_now() + timedelta(days=1)
+    next_month = get_business_now() + timedelta(days=1)
     folder_name = get_year_folder_name(next_month)
     file_name = get_month_file_name(next_month)
 
@@ -97,9 +106,52 @@ def warn_if_next_month_file_missing() -> None:
         send_telegram_message(chat_id, text)
 
 
+def warn_about_open_slips() -> None:
+    """เตือนก่อนวันธุรกิจจะเปลี่ยน ว่ายังมีสลิปค้างอยู่กี่ใบ
+
+    สลิปที่ค้างข้ามวันจะไปลงแท็บของวันถัดไป ทำให้ยอดของวันนี้ไม่ตรงกับที่เกิดจริง
+    ส่วนใบที่รอ QR อยู่จะไม่โผล่ใน /today เลย — เงินเข้าจริงแต่ไม่มีในชีท
+    และไม่มีอะไรสะดุดถ้าไม่มีใครทวง
+    """
+    from bot.commands import OPEN_STATUSES
+    from core.matcher import NEEDS_QR_STATUS
+    from database.models import Transaction
+    from database.session import SessionLocal
+
+    with SessionLocal() as db:
+        open_slips = db.query(Transaction).filter(
+            Transaction.status.in_(OPEN_STATUSES)).all()
+        by_chat = {}
+        for slip in open_slips:
+            bucket = by_chat.setdefault(str(slip.chat_id), {"total": 0, "needs_qr": 0})
+            bucket["total"] += 1
+            if str(slip.status) == NEEDS_QR_STATUS:
+                bucket["needs_qr"] += 1
+
+    for chat_id, counts in by_chat.items():
+        if chat_id not in GROUP_CATEGORY:
+            continue
+        lines = [
+            f"⏰ {counts['total']} slip(s) still open",
+            "",
+            "The business day changes in one hour. Anything left open now will land on "
+            "tomorrow's tab instead of today's.",
+        ]
+        if counts["needs_qr"]:
+            lines.append(
+                f"\n{counts['needs_qr']} of them are still waiting for a QR code — "
+                "those are not counted anywhere until someone sends it or reports the QR unreadable."
+            )
+        lines.append("\nRun /pending to see the list.")
+        send_telegram_message(chat_id, "\n".join(lines))
+        logger.info("Warned about open slips | chat_id=%s | open=%s | needs_qr=%s",
+                    chat_id, counts["total"], counts["needs_qr"])
+
+
 def start_scheduler() -> BackgroundScheduler:
     """Start the daily scheduler for automatic jobs."""
-    scheduler = BackgroundScheduler(timezone=BANGKOK_TZ)
+    # ตั้งเวลาตามปฏิทินธุรกิจ ไม่ใช่นาฬิกาไทย งานสิ้นเดือนจึงตรงกับเดือนที่ระบบใช้จริง
+    scheduler = BackgroundScheduler(timezone=BUSINESS_TZ)
 
     try:
         existing_job_ids = {job.id for job in scheduler.get_jobs()}
@@ -107,12 +159,25 @@ def start_scheduler() -> BackgroundScheduler:
         if "nightly_create_next_day_sheet" not in existing_job_ids:
             scheduler.add_job(
                 create_next_day_sheet,
-                trigger=CronTrigger(hour=23, minute=59, timezone=BANGKOK_TZ),
+                # 23:59 เวลาธุรกิจ = 22:59 นาฬิกาไทย คือ 1 นาทีก่อนวันธุรกิจใหม่เริ่ม
+                trigger=CronTrigger(hour=23, minute=59, timezone=BUSINESS_TZ),
                 id="nightly_create_next_day_sheet",
-                name="Create tomorrow's Google Sheet tab (23:59 Bangkok)",
+                name="Create tomorrow's Google Sheet tab",
                 replace_existing=True,
                 # ดีฟอลต์ของ APScheduler คือ 1 วินาที ถ้าเครื่องติดงานหนักตอนถึงเวลา
                 # งานจะถูกข้ามทั้งรอบแบบเงียบๆ — ยอมให้สายได้ถึง 1 ชั่วโมง
+                misfire_grace_time=3600,
+            )
+
+        if "nightly_warn_open_slips" not in existing_job_ids:
+            scheduler.add_job(
+                warn_about_open_slips,
+                # 23:00 เวลาธุรกิจ = 22:00 นาฬิกาไทย คือ 1 ชั่วโมงก่อนวันใหม่เริ่ม
+                # ให้เวลาพอที่จะเคลียร์ของค้างได้ทัน แต่ไม่เช้าจนคนลืมไปแล้ว
+                trigger=CronTrigger(hour=23, minute=0, timezone=BUSINESS_TZ),
+                id="nightly_warn_open_slips",
+                name="Warn the groups about slips still open before the day changes",
+                replace_existing=True,
                 misfire_grace_time=3600,
             )
 
@@ -120,7 +185,8 @@ def start_scheduler() -> BackgroundScheduler:
             scheduler.add_job(
                 warn_if_next_month_file_missing,
                 # day="last" = วันสุดท้ายของเดือน ไม่ว่าเดือนนั้นจะมี 28/29/30/31 วัน
-                trigger=CronTrigger(day="last", hour=22, minute=0, timezone=BANGKOK_TZ),
+                # นับตามปฏิทินธุรกิจ จึงตรงกับเดือนของไฟล์ชีทที่ระบบจะเขียนจริง
+                trigger=CronTrigger(day="last", hour=22, minute=0, timezone=BUSINESS_TZ),
                 id="monthly_warn_missing_file",
                 name="Warn the groups 2 hours before the new month if its file is missing",
                 replace_existing=True,
@@ -135,7 +201,7 @@ def start_scheduler() -> BackgroundScheduler:
                 id="startup_create_today_sheet",
                 name="Create today's Google Sheet tab at startup",
                 trigger="date",
-                run_date=datetime.now(BANGKOK_TZ),
+                run_date=get_business_now(),
                 replace_existing=True,
                 # ดีฟอลต์ของ APScheduler คือ 1 วินาที ถ้าเครื่องติดงานหนักตอนถึงเวลา
                 # งานจะถูกข้ามทั้งรอบแบบเงียบๆ — ยอมให้สายได้ถึง 1 ชั่วโมง
@@ -145,9 +211,18 @@ def start_scheduler() -> BackgroundScheduler:
         scheduler.start()
         logger.info("Scheduler started successfully")
         logger.info("Server now: %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z"))
-        logger.info("Bangkok now: %s", datetime.now(BANGKOK_TZ).strftime("%Y-%m-%d %H:%M:%S %Z"))
+        logger.info("Bangkok clock: %s", datetime.now(BANGKOK_TZ).strftime("%Y-%m-%d %H:%M:%S %Z"))
+        logger.info(
+            "Business day: %s (a new day starts at %s Bangkok time)",
+            get_business_now().strftime("%Y-%m-%d"), BUSINESS_DAY_STARTS_AT,
+        )
         for job in scheduler.get_jobs():
-            logger.info("Job '%s' next run at: %s", job.id, job.next_run_time)
+            # แสดงเป็นนาฬิกาไทย เพราะคนอ่าน log เทียบกับนาฬิกาบนกำแพง
+            when = to_bangkok_clock(job.next_run_time) if job.next_run_time else None
+            logger.info(
+                "Job '%s' next run at: %s (Bangkok time)",
+                job.id, when.strftime("%Y-%m-%d %H:%M") if when else "not scheduled",
+            )
         return scheduler
     except Exception as exc:
         logger.exception("Failed to start scheduler: %s", exc)

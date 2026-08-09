@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import logging
 import threading
 from typing import Tuple, Any
@@ -9,12 +9,34 @@ from core.config import config
 from core.names import get_first_names
 from google.oauth2.service_account import Credentials
 import gspread
-from services.gdrive import drive_service
+from services.gdrive import DriveUnavailable, drive_service
 from services.easyslip import BANK_DROPDOWN_VALUES
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# เวลาสองแบบ ใช้คนละหน้าที่ อย่าสลับกัน
+#
+#   BUSINESS_TZ — ใช้ตัดสินว่าสลิปใบหนึ่งเป็นของ "วันไหน เดือนไหน"
+#   BANGKOK_TZ  — ใช้แสดงเวลาให้คนอ่านเท่านั้น (ตรงกับนาฬิกาบนกำแพง)
+#
+# วันทางธุรกิจเริ่ม 23:00 ตามเวลาไทย ซึ่งเท่ากับเที่ยงคืนของ UTC+8 พอดี
+# จึงใช้ offset +8 เป็นตัวตัดวัน แทนการไปลบชั่วโมงทีละจุด
+# ทำแบบนี้แล้วงานสิ้นเดือน (day="last") จะนับวันสุดท้ายตามปฏิทินธุรกิจให้เอง
+#
+# ใช้ offset คงที่ ไม่ใช่ ZoneInfo ของประเทศใดประเทศหนึ่ง เพราะ
+# เราหมายถึง "วันของเราเริ่ม 5 ทุ่ม" ไม่ได้หมายถึงเขตเวลาของประเทศนั้นจริงๆ
+# และถ้าประเทศนั้นเปลี่ยนกฎเวลาในอนาคต ระบบจะได้ไม่เลื่อนตามโดยไม่ตั้งใจ
+# ─────────────────────────────────────────────────────────────────────────────
+BUSINESS_TZ = timezone(timedelta(hours=8), "UTC+8")
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
+
+# offset คงที่ของเวลาไทย ใช้ตอนประกอบเวลาที่แอดมินพิมพ์เอง
+# (ไทยไม่มี DST ค่านี้จึงเท่ากับ BANGKOK_TZ เสมอ แต่เขียนชัดกว่า)
+THAI_TZ = timezone(timedelta(hours=7), "UTC+7")
+
+# ชั่วโมงที่วันธุรกิจเริ่ม ตามเวลาไทย (ไว้อ้างอิงในข้อความและเอกสาร)
+BUSINESS_DAY_STARTS_AT = "23:00"
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -22,23 +44,47 @@ SCOPES = [
 ]
 
 
-def get_bangkok_now() -> datetime:
-    return datetime.now(BANGKOK_TZ)
+def get_business_now() -> datetime:
+    """เวลาปัจจุบันตามปฏิทินธุรกิจ — ใช้ตัดสินว่าสลิปเป็นของวันไหน"""
+    return datetime.now(BUSINESS_TZ)
+
+
+def to_bangkok_clock(dt: datetime) -> datetime:
+    """แปลงเป็นเวลานาฬิกาไทย ใช้ตอนแสดงให้คนอ่านเท่านั้น"""
+    return dt.astimezone(BANGKOK_TZ)
+
+
+def format_clock(dt: datetime) -> str:
+    """เวลาแบบที่ใช้ในช่อง Time ของชีท เช่น 0:18 หรือ 19:04 (ตัดศูนย์นำหน้าออก)
+
+    แสดงตามนาฬิกาไทยเสมอ เพราะเป็นเวลาที่คนอ่านชีทคาดหวัง
+    """
+    thai = to_bangkok_clock(dt) if dt.tzinfo is not None else dt
+    return f"{thai.hour}:{thai.minute:02d}"
+
+
+def format_transfer_times(moments) -> str:
+    """เวลาโอนของทุกใบในชุด ต่อกันด้วย , ตามลำดับเวลา เช่น '0:18, 0:37'
+
+    รูปเดียวส่งได้หลายสลิป ชีทจึงต้องเห็นครบทุกใบ ไม่ใช่แค่ใบแรก
+    """
+    valid = sorted(m for m in (moments or []) if m is not None)
+    return ", ".join(format_clock(moment) for moment in valid)
 
 
 def get_sheet_name_for_datetime(dt: datetime) -> str:
     """ชื่อแท็บรายวัน เช่น 04-08-2026"""
-    return dt.astimezone(BANGKOK_TZ).strftime("%d-%m-%Y")
+    return dt.astimezone(BUSINESS_TZ).strftime("%d-%m-%Y")
 
 
 def get_year_folder_name(dt: datetime) -> str:
     """ชื่อโฟลเดอร์รายปีที่อยู่ใต้โฟลเดอร์หลัก เช่น Deposit-2026"""
-    return dt.astimezone(BANGKOK_TZ).strftime("Deposit-%Y")
+    return dt.astimezone(BUSINESS_TZ).strftime("Deposit-%Y")
 
 
 def get_month_file_name(dt: datetime) -> str:
     """ชื่อไฟล์รายเดือนที่อยู่ในโฟลเดอร์รายปี เช่น check_08-2026"""
-    return dt.astimezone(BANGKOK_TZ).strftime("check_%m-%Y")
+    return dt.astimezone(BUSINESS_TZ).strftime("check_%m-%Y")
 
 
 def describe_expected_path(dt: datetime) -> str:
@@ -63,10 +109,14 @@ class SheetEntry:
     api_total_amount: float | None
     receiver_account: str | None
     chat_bank: str | None
+    # เวลาโอนตามสลิป พร้อมเขียนลงช่อง Time ได้เลย เช่น "0:18" หรือ "0:18, 0:37"
+    # ว่าง = ไม่รู้เวลาโอน ให้ใช้เวลาที่บันทึกแทนเพื่อไม่ให้ช่องโล่ง
+    transfer_time_text: str | None = None
 
     @classmethod
     def from_transaction(cls, txn) -> "SheetEntry":
         return cls(
+            transfer_time_text=txn.transfer_time_text,
             batch_id=txn.batch_id,
             category=txn.category,
             status=txn.status,
@@ -115,7 +165,7 @@ class GoogleSheetsService:
         target คือวันที่ที่ต้องการ ไม่ใช่ 'วันนี้' เสมอไป — คืนวันสิ้นเดือนเราสร้างแท็บของ
         วันพรุ่งนี้ ซึ่งต้องไปลงไฟล์ของเดือนถัดไป
         """
-        now = target or get_bangkok_now()
+        now = target or get_business_now()
         folder_name = get_year_folder_name(now)
         file_name = get_month_file_name(now)
 
@@ -625,8 +675,8 @@ class GoogleSheetsService:
             ["สรุปยอดเงินโอนเข้าทั้งหมด / แยกบัญชี (Deposit)", "", "", "", "", "", "", "", ""],
             ["บัญชี", "We88", "12T", "", "Total", "We88", "12T", "", "Total"],
             ["SCB-CP", "=SUMIF(O:O,AU3,M:M)", "=SUMIF(S:S,AU3,Q:Q)", "", "=SUM(AV3:AW3)", "=COUNTIF(O:O,AU3)", "=COUNTIF(S:S,AU3)", "", "=SUM(AZ3:BA3)"],
-            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AV4:AW4)"],
-            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AV5:AW5)"],
+            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AZ4:BA4)"],
+            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AZ5:BA5)"],
             ["TTB-Yo", "=SUMIF(O:O,AU6,M:M)", "=SUMIF(S:S,AU6,Q:Q)", "", "=SUM(AV6:AW6)", "=COUNTIF(O:O,AU6)", "=COUNTIF(S:S,AU6)", "", "=SUM(AZ6:BA6)"],
             ["SCB-Yo", "=SUMIF(O:O,AU7,M:M)", "=SUMIF(S:S,AU7,Q:Q)", "", "=SUM(AV7:AW7)", "=COUNTIF(O:O,AU7)", "=COUNTIF(S:S,AU7)", "", "=SUM(AZ7:BA7)"],
             ["", 0, 0, "", 0, 0, 0, "", 0],
@@ -670,7 +720,7 @@ class GoogleSheetsService:
     def create_sheet_for(self, target: datetime | None = None):
         """สร้างแท็บของวันที่ระบุ ถ้ายังไม่มี (ไม่ระบุ = วันนี้) เข้าคิวร่วมกับการเขียนสลิป"""
         with self._write_lock:
-            self._create_sheet_for_locked(target or get_bangkok_now())
+            self._create_sheet_for_locked(target or get_business_now())
 
     def create_today_sheet(self):
         """สร้างแท็บของวันนี้"""
@@ -684,9 +734,9 @@ class GoogleSheetsService:
         sheet_name = get_sheet_name_for_datetime(target)
 
         logger.info(
-            "🕒 Server now=%s | Bangkok now=%s | Creating sheet=%s",
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z"),
-            get_bangkok_now().strftime("%Y-%m-%d %H:%M:%S %Z"),
+            "🕒 Bangkok clock=%s | Business day=%s | Creating sheet=%s",
+            to_bangkok_clock(get_business_now()).strftime("%Y-%m-%d %H:%M:%S %Z"),
+            get_business_now().strftime("%Y-%m-%d"),
             sheet_name,
         )
         logger.info("💾 Bank dropdown values: %s", BANK_DROPDOWN_VALUES)
@@ -747,7 +797,7 @@ class GoogleSheetsService:
 
         ต้องรับ SheetEntry ไม่ใช่ ORM object เพราะฟังก์ชันนี้ถูกเรียกจาก worker thread
         """
-        if str(entry.status).strip().lower() == "reject":
+        if str(entry.status).strip().lower() in ("reject", "duplicate"):
             logger.info("Status Reject Skip saving to Google Sheets")
             return True, ""
         # Duplicate write guard is handled by DB audit logs (checked by caller)
@@ -755,7 +805,7 @@ class GoogleSheetsService:
         try:
             # กันไม่ให้สองการเขียนคำนวณแถวถัดไปได้เลขเดียวกันแล้วทับกัน
             with self._write_lock:
-                now = get_bangkok_now()
+                now = get_business_now()
                 spreadsheet = self._get_dynamic_spreadsheet(now)
                 sheet_name = get_sheet_name_for_datetime(now)
 
@@ -767,10 +817,10 @@ class GoogleSheetsService:
                     self._create_sheet_for_locked(now, spreadsheet)
                     worksheet = spreadsheet.worksheet(sheet_name)
 
-                # จัดฟอร์แมตเวลาให้แสดงแบบ HH:mm (เช่น 23:03 หรือ 0:06 ตามรูปเป้าหมาย)
-                formatted_time = now.strftime("%H:%M")
-                if formatted_time.startswith("0"):
-                    formatted_time = formatted_time[1:]  # ตัด 0 นำหน้าถ้าเป็นเลขตัวเดียวแบบ 0:06
+                # ช่อง Time = เวลาที่โอนเงินจริงตามสลิป ไม่ใช่เวลาที่กดปุ่มบันทึก
+                # สลิปค้างข้ามวันแล้วเพิ่งมากด เวลาที่ลงชีทต้องยังเป็นเวลาที่เงินออกจริง
+                # ถ้าอ่านเวลาจากสลิปไม่ได้เลย ค่อยใช้เวลาที่บันทึกแทน ดีกว่าปล่อยช่องว่าง
+                formatted_time = (entry.transfer_time_text or "").strip() or format_clock(now)
 
                 # Trans ID: caption -> ชื่อผู้ส่งจากสลิป -> ชื่อผู้ส่งที่แจ้งมาในแชท (กรณีอ่านสลิปไม่ออก)
                 trans_identifier = (
@@ -818,6 +868,13 @@ class GoogleSheetsService:
                 entry.batch_id, next_row, update_range,
             )
             return True, ""
+
+        except DriveUnavailable as exc:
+            # แยกให้ชัดว่าติดต่อ Google ไม่ได้ ไม่ใช่ไฟล์หาย
+            # ถ้าบอกว่า "ไม่พบไฟล์" คนจะไปสร้างไฟล์ซ้ำทั้งที่ของเดิมยังอยู่
+            error_msg = f"Could not reach Google Drive right now: {exc}"
+            logger.error("⚠️ %s", error_msg)
+            return False, error_msg
 
         except Exception as e:
             error_msg = f"Google Sheets Error: {e}"

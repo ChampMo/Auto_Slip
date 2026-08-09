@@ -4,6 +4,11 @@ FROM python:3.10-slim
 # ตั้งค่า Working Directory ใน Container
 WORKDIR /app
 
+# ไม่ให้ Python กันข้อความไว้ในบัฟเฟอร์
+# ถ้าไม่ตั้ง ข้อความจาก print() จะไม่โผล่ใน docker logs จนกว่าบัฟเฟอร์จะเต็มหรือโปรแกรมปิด
+# ทำให้ข้อความตอนบูต (ขยายคอลัมน์ / จำนวนผู้อนุมัติ / ปัญหาตารางบัญชี) หายไปทั้งหมด
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y libzbar0
 # คัดลอกไฟล์ requirements.txt ไปก่อนเพื่อติดตั้ง Dependencies
 COPY requirements.txt .

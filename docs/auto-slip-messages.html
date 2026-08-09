@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Slip — บอทตอบแบบนี้ หมายความว่าอะไร</title>
+</head>
+<body>
+<style>
+  :root {
+    --paper:      #F4F5F2;
+    --surface:    #FFFFFF;
+    --surface-2:  #ECEEEA;
+    --ink:        #17211F;
+    --ink-soft:   #3D4A47;
+    --muted:      #64726E;
+    --rule:       #D2D7D2;
+    --rule-soft:  #E2E6E1;
+    --accent:     #124E63;
+    --accent-ink: #0C3A4A;
+    --brass:      #A8741A;
+    --good:       #226B45;
+    --good-bg:    #E4EFE8;
+    --bad:        #9C2F27;
+    --bad-bg:     #F5E4E2;
+    --warn:       #7E5810;
+    --warn-bg:    #F4EBD8;
+    --shadow:     0 1px 2px rgba(23,33,31,.06), 0 8px 24px -16px rgba(23,33,31,.30);
+    --bar-bg:     rgba(244,245,242,.92);
+
+    --font-sans: "Leelawadee UI", "Sukhumvit Set", "Noto Sans Thai", "Thonburi",
+                 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+                 "DejaVu Sans Mono", "Leelawadee UI", "Noto Sans Thai", monospace;
+
+    --t-xs:   .75rem;
+    --t-sm:   .8125rem;
+    --t-base: 1rem;
+    --t-md:   1.0625rem;
+    --t-lg:   1.375rem;
+    --t-xl:   1.875rem;
+    --t-2xl:  2.5rem;
+
+    --rail:   34px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:     #0F1618;
+      --surface:   #16201F;
+      --surface-2: #1D2827;
+      --ink:       #E4E9E7;
+      --ink-soft:  #C2CCC9;
+      --muted:     #8E9C98;
+      --rule:      #2C3937;
+      --rule-soft: #232E2D;
+      --accent:    #63B4CD;
+      --accent-ink:#8ACBE0;
+      --brass:     #D3A44E;
+      --good:      #64BE8D;
+      --good-bg:   #163024;
+      --bad:       #E4837A;
+      --bad-bg:    #33201E;
+      --warn:      #D3A44E;
+      --warn-bg:   #302716;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+      --bar-bg:    rgba(15,22,24,.92);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0F1618;
+    --surface:   #16201F;
+    --surface-2: #1D2827;
+    --ink:       #E4E9E7;
+    --ink-soft:  #C2CCC9;
+    --muted:     #8E9C98;
+    --rule:      #2C3937;
+    --rule-soft: #232E2D;
+    --accent:    #63B4CD;
+    --accent-ink:#8ACBE0;
+    --brass:     #D3A44E;
+    --good:      #64BE8D;
+    --good-bg:   #163024;
+    --bad:       #E4837A;
+    --bad-bg:    #33201E;
+    --warn:      #D3A44E;
+    --warn-bg:   #302716;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    --bar-bg:    rgba(15,22,24,.92);
+  }
+
+  :root[data-theme="light"] {
+    --paper:      #F4F5F2;
+    --surface:    #FFFFFF;
+    --surface-2:  #ECEEEA;
+    --ink:        #17211F;
+    --ink-soft:   #3D4A47;
+    --muted:      #64726E;
+    --rule:       #D2D7D2;
+    --rule-soft:  #E2E6E1;
+    --accent:     #124E63;
+    --accent-ink: #0C3A4A;
+    --brass:      #A8741A;
+    --good:       #226B45;
+    --good-bg:    #E4EFE8;
+    --bad:        #9C2F27;
+    --bad-bg:     #F5E4E2;
+    --warn:       #7E5810;
+    --warn-bg:    #F4EBD8;
+    --shadow:     0 1px 2px rgba(23,33,31,.06), 0 8px 24px -16px rgba(23,33,31,.30);
+    --bar-bg:     rgba(244,245,242,.92);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--t-base);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- แถบเครื่องมือบนสุด ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bar-bg);
+    -webkit-backdrop-filter: saturate(180%) blur(8px);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .topbar-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: .55rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  /* ---------- หัวแบรนด์ในแถบบน ---------- */
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+  }
+  .brand-mark {
+    width: 17px;
+    height: 17px;
+    flex: none;
+    color: var(--brass);
+  }
+  .brand-name {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .brand-sep {
+    width: 1px;
+    height: 13px;
+    background: var(--rule);
+    flex: none;
+  }
+  .brand-kind {
+    font-size: var(--t-xs);
+    color: var(--muted);
+    letter-spacing: .04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .brand:hover .brand-mark { color: var(--accent); }
+  .brand:hover .brand-name { color: var(--accent); }
+  .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* จอแคบ เหลือแค่ชื่อกับสัญลักษณ์ ไม่ให้ดันปุ่มตกบรรทัด */
+  @media (max-width: 560px) {
+    .brand-sep, .brand-kind { display: none; }
+  }
+  .controls {
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
+    flex: none;
+  }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .seg button {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    padding: .3rem .6rem;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .seg button + button { border-left: 1px solid var(--rule); }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    padding: .3rem .6rem;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .icon-btn svg { width: 13px; height: 13px; flex: none; }
+  .seg button:hover, .icon-btn:hover { color: var(--accent); }
+  .seg button[aria-pressed="true"]:hover { color: var(--paper); }
+  .seg button:focus-visible, .icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* แสดงไอคอนให้ตรงกับธีมที่กำลังใช้อยู่ */
+  .icon-moon { display: none; }
+  :root[data-theme="dark"] .icon-sun { display: none; }
+  :root[data-theme="dark"] .icon-moon { display: inline; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .icon-moon { display: inline; }
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 3rem 0 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+  .masthead h1 {
+    font-size: var(--t-2xl);
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    font-weight: 700;
+    margin: 0 0 .6rem;
+    text-wrap: balance;
+  }
+  .masthead .lede {
+    font-size: var(--t-md);
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 1.75rem;
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 2rem;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--muted);
+    letter-spacing: .04em;
+  }
+  .masthead-meta b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- layout ---------- */
+  .layout { display: block; }
+  @media (min-width: 1000px) {
+    .layout {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 4rem;
+      align-items: start;
+    }
+  }
+
+  .toc { display: none; }
+  @media (min-width: 1000px) {
+    .toc {
+      display: block;
+      position: sticky;
+      top: 3.5rem;
+      font-size: var(--t-sm);
+      border-top: 1px solid var(--rule);
+      padding-top: 1rem;
+    }
+  }
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 .9rem;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+  .toc a {
+    display: block;
+    padding: .3rem 0;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .toc a:hover { color: var(--accent); }
+  .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toc .toc-group {
+    margin-top: 1.1rem;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+
+  /* ---------- sections ---------- */
+  .part-head {
+    margin: 4.5rem 0 2rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--ink);
+  }
+  .part-num {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+  .part-head h2 {
+    font-size: var(--t-xl);
+    letter-spacing: -.015em;
+    margin: .35rem 0 .5rem;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .part-head p { margin: 0; color: var(--ink-soft); max-width: 66ch; }
+
+  section { scroll-margin-top: 4rem; }
+  section > h3 {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin: 3rem 0 .75rem;
+    text-wrap: balance;
+  }
+  section > h3:first-child { margin-top: 2.25rem; }
+  h4 {
+    font-size: var(--t-md);
+    font-weight: 700;
+    margin: 2rem 0 .5rem;
+  }
+  p { margin: 0 0 1rem; max-width: 72ch; }
+  .prose-narrow { max-width: 68ch; }
+  .note { font-size: var(--t-sm); color: var(--muted); }
+
+  a { color: var(--accent); }
+
+  /* ---------- summary strip ---------- */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 0 0 1rem;
+  }
+  .fact { background: var(--surface); padding: 1rem 1.15rem; }
+  .fact dt {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: .35rem;
+  }
+  .fact dd {
+    margin: 0;
+    font-size: var(--t-lg);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .fact dd small {
+    display: block;
+    font-size: var(--t-sm);
+    font-weight: 400;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: .15rem;
+  }
+
+  /* ---------- flow ---------- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: var(--t-sm);
+    color: var(--muted);
+    margin: 1.5rem 0 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .5rem; }
+  .lg-dot, .lg-dia, .lg-end {
+    width: 12px; height: 12px; flex: none;
+    border: 2px solid var(--accent);
+    background: var(--surface);
+  }
+  .lg-dot { border-radius: 50%; }
+  .lg-dia { transform: rotate(45deg); border-color: var(--brass); }
+  .lg-end { border-radius: 50%; background: var(--accent); }
+
+  .flow { list-style: none; margin: 0; padding: 0; }
+  .flow-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    padding-bottom: 1.6rem;
+  }
+  .flow-step::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: .55rem;
+    bottom: 0;
+    width: 2px;
+    background: var(--rule);
+  }
+  .flow-step:last-child::before { display: none; }
+
+  .flow-marker {
+    width: 12px; height: 12px;
+    margin-top: .55rem;
+    border: 2px solid var(--accent);
+    background: var(--paper);
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+  }
+  .flow-step[data-kind="decision"] .flow-marker {
+    border-radius: 0;
+    transform: rotate(45deg);
+    border-color: var(--brass);
+  }
+  .flow-step[data-kind="start"] .flow-marker { background: var(--accent); }
+
+  .flow-body h4 {
+    margin: 0 0 .2rem;
+    font-size: var(--t-base);
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  .flow-body > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--t-sm);
+    max-width: 62ch;
+  }
+
+  .exits { display: grid; gap: .75rem; margin-top: .9rem; }
+  @media (min-width: 620px) {
+    .exits[data-cols="2"] { grid-template-columns: 1fr 1fr; }
+    .exits[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+  }
+  .exit {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--muted);
+    padding: .8rem .95rem .9rem;
+  }
+  .exit[data-tone="good"] { border-top-color: var(--good); }
+  .exit[data-tone="bad"]  { border-top-color: var(--bad); }
+  .exit[data-tone="warn"] { border-top-color: var(--warn); }
+  .exit p { margin: .3rem 0 0; font-size: var(--t-sm); color: var(--muted); max-width: none; }
+
+  .stamp {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: .18rem .45rem;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .stamp[data-tone="good"] { color: var(--good); background: var(--good-bg); }
+  .stamp[data-tone="bad"]  { color: var(--bad);  background: var(--bad-bg); }
+  .stamp[data-tone="warn"] { color: var(--warn); background: var(--warn-bg); }
+  .stamp[data-tone="mute"] { color: var(--muted); background: var(--surface-2); }
+
+  /* ---------- tables ---------- */
+  .table-scroll { overflow-x: auto; margin: 1.25rem 0 1.5rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 480px;
+    font-size: var(--t-sm);
+  }
+  caption {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: .6rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .6rem .85rem .6rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  thead th {
+    border-bottom: 1.5px solid var(--ink);
+    font-size: var(--t-xs);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+  td code, th code { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .acct {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-size: var(--t-sm);
+  }
+  .acct-todo { color: var(--muted); font-style: italic; opacity: .7; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: .9em;
+    background: var(--surface-2);
+    padding: .1em .35em;
+    color: var(--accent-ink);
+  }
+
+  /* ---------- transcript ---------- */
+  .chat {
+    margin: 1.25rem 0 1.5rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .chat-head {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: .55rem .9rem;
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--surface-2);
+  }
+  .chat pre {
+    margin: 0;
+    padding: .95rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    line-height: 1.7;
+    color: var(--ink-soft);
+    white-space: pre;
+  }
+  .cmt { color: var(--muted); }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--warn);
+    background: var(--surface);
+    padding: 1.15rem 1.25rem 1.25rem;
+    margin: 1.75rem 0;
+  }
+  .callout[data-tone="bad"] { border-top-color: var(--bad); }
+  .callout h4 { margin: .45rem 0 .5rem; font-size: var(--t-md); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ul.tight, ol.tight { margin: 0 0 1rem; padding-left: 1.2rem; max-width: 70ch; }
+  ul.tight li, ol.tight li { margin-bottom: .35rem; }
+
+  footer.doc-foot {
+    margin-top: 5rem;
+    padding-top: 1.25rem;
+    border-top: 2px solid var(--ink);
+    font-size: var(--t-sm);
+    color: var(--muted);
+  }
+
+  @media print {
+    body { background: #fff; }
+    .toc, .topbar { display: none; }
+    .layout { display: block; }
+    .chat, .exit, .callout, .fact { box-shadow: none; }
+  }
+</style>
+<style>
+  /* ---------- เฉพาะหน้านี้: ช่องค้นหา + การ์ดข้อความ ---------- */
+  .search-wrap { position:sticky; top:52px; z-index:9; background:var(--paper);
+                 padding:.9rem 0 .7rem; margin-bottom:.5rem;
+                 border-bottom:1px solid var(--rule-soft); }
+  .search-box { display:flex; align-items:center; gap:.6rem; border:1.5px solid var(--rule);
+                background:var(--surface); padding:.55rem .8rem; }
+  .search-box:focus-within { border-color:var(--accent); }
+  .search-box > svg { width:16px; height:16px; flex:none; color:var(--muted); }
+  #q { flex:1; border:0; background:transparent; color:var(--ink);
+       font-family:var(--font-sans); font-size:var(--t-md); outline:none; min-width:0; }
+  #q::placeholder { color:var(--muted); }
+  #clear { border:0; background:transparent; color:var(--muted); cursor:pointer;
+           font-size:1.2rem; line-height:1; padding:0 .2rem; display:none; }
+  .hint { margin:.45rem 0 0; font-size:var(--t-xs); color:var(--muted); }
+  #count { font-family:var(--font-mono); }
+
+  .msg { border:1px solid var(--rule); border-left:4px solid var(--rule);
+         background:var(--surface); padding:1rem 1.1rem; margin:1rem 0; }
+  .msg[data-tone="good"] { border-left-color:var(--good); }
+  .msg[data-tone="bad"]  { border-left-color:var(--bad); }
+  .msg[data-tone="warn"] { border-left-color:var(--warn); }
+  .msg[data-tone="info"] { border-left-color:var(--accent); }
+  .msg[hidden] { display:none; }
+  section[hidden] { display:none; }
+
+  .bubble { font-family:var(--font-mono); font-size:var(--t-sm); background:var(--surface-2);
+            padding:.5rem .7rem; margin:0 0 .8rem; overflow-wrap:anywhere; }
+  .row { display:grid; grid-template-columns:1fr; gap:.15rem .9rem; margin-bottom:.6rem; }
+  @media (min-width:640px) { .row { grid-template-columns:7.5rem 1fr; } }
+  .row:last-child { margin-bottom:0; }
+  .row dt { font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.08em;
+            text-transform:uppercase; color:var(--muted); padding-top:.35rem; }
+  .row dd { margin:0; }
+  .empty { display:none; padding:2.5rem 0; color:var(--muted); text-align:center; }
+  .empty.on { display:block; }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" aria-hidden="true">
+        <rect x="2" y="2" width="7" height="7"/>
+        <rect x="15" y="2" width="7" height="7"/>
+        <rect x="2" y="15" width="7" height="7"/>
+        <rect x="15" y="15" width="3" height="3" fill="currentColor" stroke="none"/>
+        <rect x="19" y="19" width="3" height="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="brand-name">Auto Slip</span>
+      <span class="brand-sep" aria-hidden="true"></span>
+      <span class="brand-kind">อ้างอิงข้อความของบอท · Deposit Check</span>
+    </a>
+
+    <div class="controls">
+    <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+      <span id="theme-label">ธีม</span>
+    </button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead" id="top">
+    <h1>บอทตอบแบบนี้ หมายความว่าอะไร</h1>
+    <p class="lede">
+      รวมทุกข้อความที่บอทตอบในกลุ่ม พร้อมความหมายและสิ่งที่ต้องทำต่อ
+      พิมพ์คำที่เห็นบนหน้าจอลงในช่องค้นหาได้เลย ไม่ต้องพิมพ์ให้ครบทั้งประโยค
+    </p>
+    <div class="masthead-meta">
+      <span><b>เวอร์ชัน</b> 1.4.2 (2026-08-09)</span>
+      <span><b>โปรเจกต์</b> Deposit Check</span>
+      <span><b>ใช้คู่กับ</b> คู่มือใช้งานระบบ</span>
+      <span><b>ค้นหา</b> กด / เพื่อไปที่ช่องค้นหา</span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc" aria-label="สารบัญ">
+      <p class="toc-title">สารบัญ</p>
+      <ol>
+        <li class="toc-group">ข้อความของบอท</li>
+        <li><a href="#s1">ตอนส่งสลิปเข้ากลุ่ม</a></li>
+        <li><a href="#s2">ตอนบอทถามข้อมูลเพิ่ม</a></li>
+        <li><a href="#s3">ตอนกดปุ่ม</a></li>
+        <li><a href="#s4">คำเตือนที่แทรกอยู่ในข้อความ</a></li>
+        <li><a href="#s5">สถานะที่เห็นใน /status และ /pending</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+  <div class="search-wrap">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="ค้นหา เช่น QR, ซ้ำ, duplicate, ยอด, pending" autocomplete="off">
+      <button id="clear" type="button" aria-label="ล้างคำค้น">×</button>
+    </div>
+    <p class="hint">แสดง <span id="count">0</span> รายการ · ค้นได้ทั้งภาษาไทยและข้อความภาษาอังกฤษที่บอทส่ง</p>
+  </div>
+
+  <p class="empty" id="empty">ไม่พบข้อความที่ตรงกับคำค้น — ลองพิมพ์คำสั้นลง เช่น <code>QR</code> หรือ <code>ซ้ำ</code></p>
+
+  <section id="s1">
+    <h2><span class="n">ส่วนที่ 1</span>ตอนส่งสลิปเข้ากลุ่ม</h2>
+
+    <div class="msg" data-tone="good">
+      <p class="bubble">✅ Received automatically</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ตรวจกับธนาคารแล้วผ่านครบทั้งชื่อ ยอดเงิน และบัญชีผู้รับ บันทึกลงชีทของวันนั้นเรียบร้อย</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ไม่ต้องทำอะไร นี่คือเส้นทางปกติที่ไม่ต้องมีคนกด</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">❌ Rejected automatically</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ยอดเงินไม่ตรงกับที่แจ้ง หรือเงินเข้าบัญชีที่ไม่ใช่ของบริษัท สองเรื่องนี้ระบบปฏิเสธเองได้เพราะไม่มีทางตีความเป็นอย่างอื่น ไม่มีอะไรถูกบันทึก</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>อ่านบรรทัด Slip กับ Chat ว่าต่างกันตรงไหน ถ้าพิมพ์ยอดผิดให้ส่งสลิปใบเดิมใหม่พร้อมแก้ข้อความ ถ้าคิดว่าระบบตัดสินผิดให้ใช้ <code>/recheck</code> ตอบกลับที่รูปสลิป</dd></dl>
+      <dl class="row"><dt>ถ้ายอดไม่ตรง</dt><dd>จะมีปุ่ม <b>➕ Add another QR</b> ติดมาด้วย เพราะยอดไม่ตรงมักแปลว่าในรูปมีสลิปอีกใบที่ระบบอ่านไม่เจอ กดแล้วส่ง QR ของใบที่ขาดเข้าไปได้เลย ไม่ต้อง <code>/recheck</code> ก่อน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Manual review required</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ข้อมูลไม่พอให้ระบบตัดสินเอง เช่นชื่อไม่ตรง ตรวจกับธนาคารไม่สำเร็จ หรือรูปเดียวมีหลายสลิป ในข้อความจะกางให้เห็นว่าข้อไหนติด</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ผู้อนุมัติดูข้อมูลแล้วกด Receive หรือ Reject ถ้าระบบสงสัยว่าซ้ำจะมีปุ่ม Duplicate เพิ่มมาให้ด้วย</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">🔍 QR code needed</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>อ่าน QR บนรูปไม่ออก จึงยังยืนยันกับธนาคารไม่ได้ ยังไม่มีอะไรถูกบันทึกและยังไม่มีปุ่มให้กด</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd><b>ตอบกลับที่ข้อความนี้</b> ด้วยอย่างใดอย่างหนึ่ง — (1) รูปที่ครอปเอาเฉพาะ QR หรือ (2) รหัส QR เป็นข้อความ อ่านได้จากเว็บที่ลิงก์ไว้ในข้อความ ถ้า QR บนสลิปเสียจนอ่านไม่ได้จริงๆ ให้ผู้อนุมัติกดปุ่ม 🚫 ใต้ข้อความ<br><b>เฉพาะผู้อนุมัติเท่านั้นที่ตอบได้</b> ถ้าคนส่งสลิปไม่ได้อยู่ในรายชื่อ ให้ส่งรูป QR ให้ผู้อนุมัติเป็นคนตอบแทน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Duplicate slip</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>สลิปใบนี้เคยส่งเข้ามาแล้ว ระบบจำได้จาก QR หรือจากไฟล์รูปที่เหมือนกันเป๊ะ จึงไม่บันทึกซ้ำ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ในข้อความจะบอกว่าใบแรกจบยังไงและมีลิงก์กลับไปหา ถ้าใบแรกถูกปฏิเสธไปแล้ว ส่งใบเดิมเข้ามาแก้ตัวได้ตามปกติ</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">⚠️ Could not download the photo</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>โหลดรูปจาก Telegram ไม่สำเร็จ เป็นปัญหาเครือข่าย ไม่เกี่ยวกับตัวสลิป</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ส่งรูปเดิมเข้ามาใหม่ได้เลย ยังไม่มีรายการไหนถูกสร้าง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">(บอทเงียบ ไม่ตอบอะไรเลย)</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>อย่างใดอย่างหนึ่ง — รูปนั้นส่งมาโดยไม่มีข้อความกำกับ (บอทถือว่าไม่ใช่การแจ้งฝาก) หรือกลุ่มนั้นไม่ได้ลงทะเบียนไว้ในระบบ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ถ้าตั้งใจส่งสลิป ให้ส่งใหม่พร้อมข้อความแจ้ง TRANS ID ชื่อ และยอด ถ้าเป็นกลุ่มใหม่ต้องเพิ่ม chat id ลง <code>.env</code> แล้วรีสตาร์ทบอทก่อน</dd></dl>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">ส่วนที่ 2</span>ตอนบอทถามข้อมูลเพิ่ม</h2>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">💬 Amount needed</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ทั้งสลิปและข้อความในแชทไม่มียอดเลย บันทึกไปก็จะได้แถวที่ช่องจำนวนเงินว่าง</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตอบกลับข้อความนั้นด้วยตัวเลขยอด เช่น <code>1500</code> เฉพาะคนที่กด Receive เท่านั้นที่ตอบได้</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">🕒 Transfer time needed</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>อ่านเวลาโอนจากสลิปไม่ได้ ซึ่งเป็นค่าที่ต้องลงในช่อง Time ของชีท</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตอบกลับด้วยวันและเวลาที่เห็นบนสลิป เช่น <code>8/8/69 0:18</code> รับทั้ง พ.ศ. และเดือนภาษาไทย ถ้ารูปเดียวมีสองสลิปให้ใส่ทั้งสองเวลาคั่นด้วยจุลภาค <code>8/8/69 0:18, 0:37</code></dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">➕ Add another QR</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>มีคนกดปุ่ม ➕ เพื่อบอกว่าในรูปยังมีสลิปอีกใบที่ระบบอ่านไม่เจอ บอทกำลังรอ QR ของใบที่ขาด</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตอบกลับข้อความนั้นด้วยรูปที่ครอปเอาเฉพาะ QR ของใบที่ขาด หรือวางรหัส QR เป็นข้อความ <b>QR ที่อ่านได้แล้วยังอยู่ครบ</b> ดวงใหม่จะถูกเอาไปรวม แล้วตรวจใหม่ทั้งชุด ถ้าเติมแล้วยอดยังไม่ตรง แปลว่ายังขาดอีกใบ กดปุ่มเติมซ้ำได้</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ That is not a valid amount</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>สิ่งที่พิมพ์ตอบมาไม่ใช่ตัวเลขที่มากกว่าศูนย์</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตอบกลับใหม่ด้วยตัวเลขล้วน เช่น <code>1500</code> หรือ <code>1,500.00</code></dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ That is not a valid date and time</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>อ่านวันหรือเวลาที่พิมพ์มาไม่ออก หรือเป็นเวลาที่ไม่มีจริง เช่น <code>25:00</code></dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>พิมพ์ใหม่ตามรูปแบบ <code>8/8/69 0:18</code> โดยเวลาต้องมี <code>:</code> คั่นชั่วโมงกับนาที</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Still no QR code in that picture</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>รูปที่ตอบกลับมายังอ่าน QR ไม่ออก มักเกิดจากภาพเบลอหรือ QR เล็กเกินไป</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ครอปให้ QR เต็มกรอบรูปมากขึ้นแล้วส่งใหม่ หรือเปลี่ยนไปใช้วิธีวางรหัส QR เป็นข้อความแทน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ That does not look like a QR code</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ข้อความที่วางมาสั้นเกินไปหรือมีช่องว่างปน จึงไม่น่าจะใช่รหัสจาก QR</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>รหัสที่ถูกต้องเป็นบรรทัดยาวติดกันไม่มีเว้นวรรค มักขึ้นต้นด้วย <code>00</code> และยาวราว 100–200 ตัว วางมาทั้งก้อน</dd></dl>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">ส่วนที่ 3</span>ตอนกดปุ่ม</h2>
+
+    <div class="msg" data-tone="good">
+      <p class="bubble">✅ Received</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>บันทึกลงชีทของวันนั้นแล้ว พร้อมชื่อคนที่กด</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ไม่ต้องทำอะไร ปุ่มบนข้อความเดิมจะถูกปิดให้อัตโนมัติ</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">❌ Rejected</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ไม่บันทึกอะไรเลย และปลดล็อกให้ส่งสลิปใบเดิมเข้ามาแก้ตัวใหม่ได้</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ถ้ากดผิด ใช้ <code>/recheck</code> ตอบกลับที่รูปสลิปเพื่อเอาปุ่มกลับมา</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">♻️ Marked as duplicate</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>มีคนยืนยันว่าเป็นเงินก้อนเดียวกับใบที่บันทึกไปแล้ว จึงไม่ลงชีทซ้ำ ต่างจาก Reject ตรงที่<b>ไม่</b>ปลดล็อกให้ส่งใบเดิมเข้ามาอีก</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตรวจว่าใบแรกลงชีทถูกต้องแล้วด้วย <code>/status</code> ถ้ากดผิดจริงๆ ต้องแก้ในชีทเอง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">✅ Already received / ❌ Already rejected</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>มีคนอื่นกดไปก่อนแล้ว ปุ่มที่ค้างอยู่บนหน้าจอของคุณเป็นของเก่า</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ไม่ต้องทำอะไร ระบบกันไม่ให้บันทึกซ้ำอยู่แล้ว ดูว่าใครกดได้จาก <code>/status</code></dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">✅ Already saved</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>สลิปใบนี้เขียนลงชีทไปแล้ว ระบบจึงไม่เขียนซ้ำ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>เปิดชีทของวันนั้นดูว่ามีแถวอยู่จริง ถ้าไม่มีให้แจ้งผู้ดูแลระบบ</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">⚠️ Could not save to today's sheet</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>เขียนลงชีทไม่สำเร็จ เช่นหาไฟล์ประจำเดือนไม่เจอ หรือ Google ตอบไม่ได้ชั่วคราว สลิปถูกปลดล็อกให้กดใหม่ได้แล้ว</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>รัน <code>/health</code> ดูว่าติดตรงไหน แก้ที่ต้นเหตุแล้วกด Receive ซ้ำอีกครั้ง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">❌ This slip was already saved to the sheet</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ใช้ <code>/recheck</code> กับใบที่บันทึกไปแล้ว ซึ่งทำไม่ได้เพราะจะทำให้ชีทมีสองแถว</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ถ้าแถวในชีทผิด ต้องแก้ในชีทโดยตรง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">♻️ Sent back for checking</p>
+      <dl class="row"><dt>หมายถึง</dt><dd><code>/recheck</code> เอาปุ่มกลับมาให้ตัดสินใหม่ ไม่ได้ไปตรวจกับธนาคารซ้ำ ข้อมูลที่แสดงคือชุดเดิมที่เก็บไว้</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตัดสินใหม่จากข้อมูลที่กางให้ดู</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">ปุ่ม ➕ Add another QR (บนข้อความแมนนวลทุกใบ)</p>
+      <dl class="row"><dt>เมื่อไหร่ถึงใช้</dt><dd>เมื่อคุณเห็นด้วยตาว่าในรูปมีสลิปมากกว่าที่ระบบอ่านเจอ เช่นภาพเดียวมี QR สองดวงแต่ระบบอ่านได้ดวงเดียว ระบบไม่มีทางรู้เรื่องนี้เอง ต้องให้คนบอก</dd></dl>
+      <dl class="row"><dt>ผลที่เกิด</dt><dd>ใบที่ถูกปฏิเสธไปแล้วจะถูกปลดล็อกให้ตรวจใหม่ และบันทึกไว้ว่าใครเป็นคนกด ใบที่บันทึกลงชีทไปแล้วกดไม่ได้ ต้องไปแก้ในชีทเอง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">⚠️ Only approvers can answer this</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>คนที่ตอบคำขอ QR ไม่ได้อยู่ในรายชื่อผู้อนุมัติ</dd></dl>
+      <dl class="row"><dt>ทำไมถึงจำกัด</dt><dd>QR คือสิ่งที่ตัดสินว่าเงินก้อนนี้ยืนยันกับธนาคารได้หรือไม่ ถ้าใครก็ยัดเข้ามาได้ เท่ากับเปิดให้คนนอกป้อนหลักฐานเข้าเส้นทางที่จบด้วยการลงชีท</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ส่งรูป QR ให้ผู้อนุมัติเป็นคนตอบแทน หรือเพิ่มสิทธิ์ให้คนนั้นด้วย <code>/approver_add</code></dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">You are not allowed to approve slips</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>คนที่กดไม่ได้อยู่ในรายชื่อผู้อนุมัติ การเป็นแอดมินของกลุ่มไม่ได้ทำให้กดได้</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ให้คนที่มีสิทธิ์อยู่แล้วเพิ่มให้ด้วย <code>/approver_add</code> โดยตอบกลับที่ข้อความของคนนั้น</dd></dl>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">ส่วนที่ 4</span>คำเตือนที่แทรกอยู่ในข้อความ</h2>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Possible duplicate — same amount at the same minute as: ID …</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>มีอีกรายการที่ยอดเท่ากันและเวลาโอนตรงกันถึงระดับนาที เป็นการเตือนเท่านั้น ระบบไม่บล็อกให้</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>เอา ID ที่บอกไปเช็คด้วย <code>/status</code> ถ้าเป็นเงินก้อนเดียวกันให้กดปุ่ม Duplicate ถ้าคนละก้อนก็รับได้ตามปกติ</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Possible duplicate — N other slip(s) today have the same amount</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>วันนี้มีรายการยอดเท่ากันอยู่แล้ว ขึ้นเฉพาะกับใบที่ไม่มี QR ซึ่งไม่มีตัวกันซ้ำที่แน่นอน</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>เทียบกับใบที่ลิงก์ไว้ก่อนตัดสิน ลูกค้าคนละคนโอนยอดเท่ากันในวันเดียวกันเกิดขึ้นได้ ไม่ได้แปลว่าซ้ำเสมอไป</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ The message has no amount label, but it contains … which matches the slip</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ข้อความไม่ได้เขียนป้าย AMOUNT ไว้ แต่มีตัวเลขลอยๆ ที่บังเอิญตรงกับยอดในสลิป ระบบไม่ยอมเดาเอง</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ยืนยันว่าตัวเลขนั้นคือยอดฝากจริงก่อนกด Receive และบอกคนส่งให้ใส่ป้าย <code>AMOUNT THB :</code> ครั้งต่อไป</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ (คำเตือนว่ายอดบวกไม่ลง)</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ข้อความเขียนแบบ <code>100+100 = 300</code> ซึ่งบวกไม่ลง ระบบยึดตามตัวเลขที่เขาเขียนไว้แต่ติดธงไว้ และจะไม่ปฏิเสธอัตโนมัติ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ถามคนส่งว่ายอดจริงคือเท่าไหร่ก่อนตัดสิน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">Slip verification API error (message: slip_pending)</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>EasySlip ยังตรวจสลิปใบนี้กับธนาคารไม่เสร็จ มักเกิดกับสลิปที่เพิ่งโอนไม่กี่วินาที ไม่ใช่สลิปปลอม</dd></dl>
+      <dl class="row"><dt>บอททำอะไรแล้ว</dt><dd>ลองถามธนาคารซ้ำให้เอง 3 ครั้ง ห่างกันครั้งละ 6 วินาที ที่ขึ้นข้อความนี้แปลว่าครบ 3 ครั้งแล้วยังไม่พร้อม</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>รออีกสักครู่แล้วกดปุ่ม <b>🔄 Check with the bank again</b> ใต้ข้อความ ไม่ต้องส่งสลิปเข้ามาใหม่</dd></dl>
+      <dl class="row"><dt>ทำไมไม่มีปุ่ม Receive</dt><dd>ตั้งใจซ่อนไว้ในกรณีนี้ เพราะปัญหานี้หายเองใน 1–2 นาที การกดรับตอนนี้คือการบันทึกเงินที่ยังไม่มีใครตรวจกับธนาคารเลย ถ้ารอแล้วยังไม่หายจริงๆ ให้ Reject แล้วส่งใหม่</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">ปุ่ม 🔄 Check with the bank again</p>
+      <dl class="row"><dt>ขึ้นเมื่อไหร่</dt><dd>เมื่อตรวจกับธนาคารไม่สำเร็จ ทั้งกรณีธนาคารยังไม่พร้อม โควตาหมด หรือ EasySlip ล่ม</dd></dl>
+      <dl class="row"><dt>ทำอะไร</dt><dd>เอา QR ชุดเดิมไปถามธนาคารใหม่ทั้งชุด ไม่ต้องส่งสลิปเข้ามาใหม่ ถ้าคราวนี้ผ่านก็เดินต่อตามปกติ อาจรับอัตโนมัติได้เลย</dd></dl>
+      <dl class="row"><dt>กดไม่ได้เมื่อ</dt><dd>ใบนั้นบันทึกลงชีทไปแล้ว หรือยังไม่มี QR ในระบบเลย (ต้องส่ง QR ก่อน)</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">Quota exceeded or EasySlip package expired</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>โควตาการตรวจสลิปหมด ทุกใบหลังจากนี้จะตรวจกับธนาคารไม่ได้และตกมาให้คนตัดสินทั้งหมด</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ต่ออายุแพ็กเกจ EasySlip ทันที นี่เป็นเรื่องด่วน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">Slip not found in bank records, or QR code is invalid</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ธนาคารไม่รู้จักรายการนี้ อาจเป็นสลิปปลอม หรือ QR ในรูปไม่ใช่ QR ของสลิป</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตรวจสอบกับคนโอนก่อนรับ อย่ากด Receive จนกว่าจะมั่นใจ</dd></dl>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">ส่วนที่ 5</span>สถานะที่เห็นใน /status และ /pending</h2>
+
+    <div class="msg" data-tone="good">
+      <p class="bubble">✅ Received</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>จบแล้ว บันทึกลงชีทเรียบร้อย</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="bad">
+      <p class="bubble">❌ Rejected</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>จบแล้ว ไม่ได้บันทึก และส่งใบเดิมเข้ามาใหม่ได้</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">♻️ Marked as duplicate</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>จบแล้ว มีคนยืนยันว่าซ้ำกับใบก่อนหน้า ส่งใบเดิมเข้ามาใหม่ไม่ได้</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⏳ Waiting for a decision</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ยังไม่มีใครกด ปุ่มยังอยู่บนข้อความเดิม</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ดูรายการที่ค้างทั้งหมดด้วย <code>/pending</code> แล้วเคลียร์ให้จบก่อนเปลี่ยนวันตอน 23:00</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">🔍 Waiting for the QR code</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>บอทขอ QR ไปแล้วแต่ยังไม่มีใครตอบ ใบนี้ยังกดรับไม่ได้</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>ตอบกลับข้อความที่บอททวงไว้ หรือให้ผู้อนุมัติกดปุ่ม 🚫 ถ้า QR เสียจริง</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="warn">
+      <p class="bubble">⚠️ Interrupted while saving — please send it again</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>บอทดับกลางการเขียนชีท ระบบกู้ให้ตอนบูตครั้งถัดไปแล้ว</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>เช็คในชีทว่ามีแถวหรือยัง ถ้าไม่มีให้ส่งสลิปใบเดิมเข้ามาใหม่</dd></dl>
+    </div>
+  </section>
+
+      <footer>Auto Slip 1.4.2 · เอกสารนี้อธิบายเฉพาะข้อความที่บอทตอบ · ขั้นตอนการทำงานทั้งหมดอยู่ในคู่มือใช้งานระบบ</footer>
+    </main>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var toggle = document.getElementById("theme-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        var dark = root.getAttribute("data-theme") === "dark"
+          || (!root.getAttribute("data-theme")
+              && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        root.setAttribute("data-theme", dark ? "light" : "dark");
+      });
+    }
+
+    var input = document.getElementById("q");
+    var clear = document.getElementById("clear");
+    var count = document.getElementById("count");
+    var empty = document.getElementById("empty");
+    var cards = Array.prototype.slice.call(document.querySelectorAll(".msg"));
+    var sections = Array.prototype.slice.call(document.querySelectorAll("main section"));
+
+    cards.forEach(function (card) {
+      card.dataset.text = card.textContent.toLowerCase().replace(/\s+/g, " ");
+    });
+
+    function apply() {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      cards.forEach(function (card) {
+        var hit = !q || card.dataset.text.indexOf(q) !== -1;
+        card.hidden = !hit;
+        if (hit) shown++;
+      });
+      // ซ่อนหัวข้อของส่วนที่ไม่เหลือรายการเลย ไม่งั้นจะเห็นหัวข้อลอยๆ
+      sections.forEach(function (section) {
+        section.hidden = !section.querySelector(".msg:not([hidden])");
+      });
+      count.textContent = shown;
+      empty.classList.toggle("on", shown === 0);
+      clear.style.display = q ? "block" : "none";
+    }
+
+    input.addEventListener("input", apply);
+    clear.addEventListener("click", function () { input.value = ""; apply(); input.focus(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "/" && document.activeElement !== input) { e.preventDefault(); input.focus(); }
+      if (e.key === "Escape" && document.activeElement === input) { input.value = ""; apply(); }
+    });
+    apply();
+  })();
+</script>
+
+</body>
+</html>

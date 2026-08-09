@@ -1,0 +1,8 @@
+# สคริปต์ที่ต้องรันบน Linux ต้องเป็น LF เสมอ
+# ถ้ากลายเป็น CRLF จาก editor บน Windows จะรันไม่ได้
+# (ขึ้น error แปลกๆ เช่น "bad interpreter: /usr/bin/env bash^M")
+*.sh text eol=lf
+
+# Dockerfile และไฟล์ตั้งค่าที่คอนเทนเนอร์อ่าน ก็ต้อง LF เหมือนกัน
+Dockerfile  text eol=lf
+*.yml       text eol=lf

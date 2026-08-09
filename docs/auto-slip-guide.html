@@ -1,0 +1,1478 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Slip — คู่มือระบบตรวจสลิปอัตโนมัติ</title>
+</head>
+<body>
+<style>
+  :root {
+    --paper:      #F4F5F2;
+    --surface:    #FFFFFF;
+    --surface-2:  #ECEEEA;
+    --ink:        #17211F;
+    --ink-soft:   #3D4A47;
+    --muted:      #64726E;
+    --rule:       #D2D7D2;
+    --rule-soft:  #E2E6E1;
+    --accent:     #124E63;
+    --accent-ink: #0C3A4A;
+    --brass:      #A8741A;
+    --good:       #226B45;
+    --good-bg:    #E4EFE8;
+    --bad:        #9C2F27;
+    --bad-bg:     #F5E4E2;
+    --warn:       #7E5810;
+    --warn-bg:    #F4EBD8;
+    --shadow:     0 1px 2px rgba(23,33,31,.06), 0 8px 24px -16px rgba(23,33,31,.30);
+    --bar-bg:     rgba(244,245,242,.92);
+
+    --font-sans: "Leelawadee UI", "Sukhumvit Set", "Noto Sans Thai", "Thonburi",
+                 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+                 "DejaVu Sans Mono", "Leelawadee UI", "Noto Sans Thai", monospace;
+
+    --t-xs:   .75rem;
+    --t-sm:   .8125rem;
+    --t-base: 1rem;
+    --t-md:   1.0625rem;
+    --t-lg:   1.375rem;
+    --t-xl:   1.875rem;
+    --t-2xl:  2.5rem;
+
+    --rail:   34px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:     #0F1618;
+      --surface:   #16201F;
+      --surface-2: #1D2827;
+      --ink:       #E4E9E7;
+      --ink-soft:  #C2CCC9;
+      --muted:     #8E9C98;
+      --rule:      #2C3937;
+      --rule-soft: #232E2D;
+      --accent:    #63B4CD;
+      --accent-ink:#8ACBE0;
+      --brass:     #D3A44E;
+      --good:      #64BE8D;
+      --good-bg:   #163024;
+      --bad:       #E4837A;
+      --bad-bg:    #33201E;
+      --warn:      #D3A44E;
+      --warn-bg:   #302716;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+      --bar-bg:    rgba(15,22,24,.92);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0F1618;
+    --surface:   #16201F;
+    --surface-2: #1D2827;
+    --ink:       #E4E9E7;
+    --ink-soft:  #C2CCC9;
+    --muted:     #8E9C98;
+    --rule:      #2C3937;
+    --rule-soft: #232E2D;
+    --accent:    #63B4CD;
+    --accent-ink:#8ACBE0;
+    --brass:     #D3A44E;
+    --good:      #64BE8D;
+    --good-bg:   #163024;
+    --bad:       #E4837A;
+    --bad-bg:    #33201E;
+    --warn:      #D3A44E;
+    --warn-bg:   #302716;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    --bar-bg:    rgba(15,22,24,.92);
+  }
+
+  :root[data-theme="light"] {
+    --paper:      #F4F5F2;
+    --surface:    #FFFFFF;
+    --surface-2:  #ECEEEA;
+    --ink:        #17211F;
+    --ink-soft:   #3D4A47;
+    --muted:      #64726E;
+    --rule:       #D2D7D2;
+    --rule-soft:  #E2E6E1;
+    --accent:     #124E63;
+    --accent-ink: #0C3A4A;
+    --brass:      #A8741A;
+    --good:       #226B45;
+    --good-bg:    #E4EFE8;
+    --bad:        #9C2F27;
+    --bad-bg:     #F5E4E2;
+    --warn:       #7E5810;
+    --warn-bg:    #F4EBD8;
+    --shadow:     0 1px 2px rgba(23,33,31,.06), 0 8px 24px -16px rgba(23,33,31,.30);
+    --bar-bg:     rgba(244,245,242,.92);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--t-base);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- แถบเครื่องมือบนสุด ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bar-bg);
+    -webkit-backdrop-filter: saturate(180%) blur(8px);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .topbar-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: .55rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  /* ---------- หัวแบรนด์ในแถบบน ---------- */
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+  }
+  .brand-mark {
+    width: 17px;
+    height: 17px;
+    flex: none;
+    color: var(--brass);
+  }
+  .brand-name {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .brand-sep {
+    width: 1px;
+    height: 13px;
+    background: var(--rule);
+    flex: none;
+  }
+  .brand-kind {
+    font-size: var(--t-xs);
+    color: var(--muted);
+    letter-spacing: .04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .brand:hover .brand-mark { color: var(--accent); }
+  .brand:hover .brand-name { color: var(--accent); }
+  .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* จอแคบ เหลือแค่ชื่อกับสัญลักษณ์ ไม่ให้ดันปุ่มตกบรรทัด */
+  @media (max-width: 560px) {
+    .brand-sep, .brand-kind { display: none; }
+  }
+  .controls {
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
+    flex: none;
+  }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .seg button {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    padding: .3rem .6rem;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .seg button + button { border-left: 1px solid var(--rule); }
+  .seg button[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    padding: .3rem .6rem;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .icon-btn svg { width: 13px; height: 13px; flex: none; }
+  .seg button:hover, .icon-btn:hover { color: var(--accent); }
+  .seg button[aria-pressed="true"]:hover { color: var(--paper); }
+  .seg button:focus-visible, .icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* แสดงไอคอนให้ตรงกับธีมที่กำลังใช้อยู่ */
+  .icon-moon { display: none; }
+  :root[data-theme="dark"] .icon-sun { display: none; }
+  :root[data-theme="dark"] .icon-moon { display: inline; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .icon-moon { display: inline; }
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 3rem 0 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+  .masthead h1 {
+    font-size: var(--t-2xl);
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    font-weight: 700;
+    margin: 0 0 .6rem;
+    text-wrap: balance;
+  }
+  .masthead .lede {
+    font-size: var(--t-md);
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 1.75rem;
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 2rem;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--muted);
+    letter-spacing: .04em;
+  }
+  .masthead-meta b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- layout ---------- */
+  .layout { display: block; }
+  @media (min-width: 1000px) {
+    .layout {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 4rem;
+      align-items: start;
+    }
+  }
+
+  .toc { display: none; }
+  @media (min-width: 1000px) {
+    .toc {
+      display: block;
+      position: sticky;
+      top: 3.5rem;
+      font-size: var(--t-sm);
+      border-top: 1px solid var(--rule);
+      padding-top: 1rem;
+    }
+  }
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 .9rem;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+  .toc a {
+    display: block;
+    padding: .3rem 0;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .toc a:hover { color: var(--accent); }
+  .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toc .toc-group {
+    margin-top: 1.1rem;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+
+  /* ---------- sections ---------- */
+  .part-head {
+    margin: 4.5rem 0 2rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--ink);
+  }
+  .part-num {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+  .part-head h2 {
+    font-size: var(--t-xl);
+    letter-spacing: -.015em;
+    margin: .35rem 0 .5rem;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .part-head p { margin: 0; color: var(--ink-soft); max-width: 66ch; }
+
+  section { scroll-margin-top: 4rem; }
+  section > h3 {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin: 3rem 0 .75rem;
+    text-wrap: balance;
+  }
+  section > h3:first-child { margin-top: 2.25rem; }
+  h4 {
+    font-size: var(--t-md);
+    font-weight: 700;
+    margin: 2rem 0 .5rem;
+  }
+  p { margin: 0 0 1rem; max-width: 72ch; }
+  .prose-narrow { max-width: 68ch; }
+  .note { font-size: var(--t-sm); color: var(--muted); }
+
+  a { color: var(--accent); }
+
+  /* ---------- summary strip ---------- */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 0 0 1rem;
+  }
+  .fact { background: var(--surface); padding: 1rem 1.15rem; }
+  .fact dt {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: .35rem;
+  }
+  .fact dd {
+    margin: 0;
+    font-size: var(--t-lg);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .fact dd small {
+    display: block;
+    font-size: var(--t-sm);
+    font-weight: 400;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: .15rem;
+  }
+
+  /* ---------- flow ---------- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: var(--t-sm);
+    color: var(--muted);
+    margin: 1.5rem 0 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .5rem; }
+  .lg-dot, .lg-dia, .lg-end {
+    width: 12px; height: 12px; flex: none;
+    border: 2px solid var(--accent);
+    background: var(--surface);
+  }
+  .lg-dot { border-radius: 50%; }
+  .lg-dia { transform: rotate(45deg); border-color: var(--brass); }
+  .lg-end { border-radius: 50%; background: var(--accent); }
+
+  .flow { list-style: none; margin: 0; padding: 0; }
+  .flow-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    padding-bottom: 1.6rem;
+  }
+  .flow-step::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: .55rem;
+    bottom: 0;
+    width: 2px;
+    background: var(--rule);
+  }
+  .flow-step:last-child::before { display: none; }
+
+  .flow-marker {
+    width: 12px; height: 12px;
+    margin-top: .55rem;
+    border: 2px solid var(--accent);
+    background: var(--paper);
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+  }
+  .flow-step[data-kind="decision"] .flow-marker {
+    border-radius: 0;
+    transform: rotate(45deg);
+    border-color: var(--brass);
+  }
+  .flow-step[data-kind="start"] .flow-marker { background: var(--accent); }
+
+  .flow-body h4 {
+    margin: 0 0 .2rem;
+    font-size: var(--t-base);
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  .flow-body > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--t-sm);
+    max-width: 62ch;
+  }
+
+  .exits { display: grid; gap: .75rem; margin-top: .9rem; }
+  @media (min-width: 620px) {
+    .exits[data-cols="2"] { grid-template-columns: 1fr 1fr; }
+    .exits[data-cols="3"] { grid-template-columns: repeat(3, 1fr); }
+  }
+  .exit {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--muted);
+    padding: .8rem .95rem .9rem;
+  }
+  .exit[data-tone="good"] { border-top-color: var(--good); }
+  .exit[data-tone="bad"]  { border-top-color: var(--bad); }
+  .exit[data-tone="warn"] { border-top-color: var(--warn); }
+  .exit p { margin: .3rem 0 0; font-size: var(--t-sm); color: var(--muted); max-width: none; }
+
+  .stamp {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: .18rem .45rem;
+    border: 1px solid currentColor;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .stamp[data-tone="good"] { color: var(--good); background: var(--good-bg); }
+  .stamp[data-tone="bad"]  { color: var(--bad);  background: var(--bad-bg); }
+  .stamp[data-tone="warn"] { color: var(--warn); background: var(--warn-bg); }
+  .stamp[data-tone="mute"] { color: var(--muted); background: var(--surface-2); }
+
+  /* ---------- tables ---------- */
+  .table-scroll { overflow-x: auto; margin: 1.25rem 0 1.5rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 480px;
+    font-size: var(--t-sm);
+  }
+  caption {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: .6rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .6rem .85rem .6rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  thead th {
+    border-bottom: 1.5px solid var(--ink);
+    font-size: var(--t-xs);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+  td code, th code { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .acct {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-size: var(--t-sm);
+  }
+  .acct-todo { color: var(--muted); font-style: italic; opacity: .7; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: .9em;
+    background: var(--surface-2);
+    padding: .1em .35em;
+    color: var(--accent-ink);
+  }
+
+  /* ---------- transcript ---------- */
+  .chat {
+    margin: 1.25rem 0 1.5rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .chat-head {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: .55rem .9rem;
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--surface-2);
+  }
+  .chat pre {
+    margin: 0;
+    padding: .95rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    line-height: 1.7;
+    color: var(--ink-soft);
+    white-space: pre;
+  }
+  .cmt { color: var(--muted); }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--warn);
+    background: var(--surface);
+    padding: 1.15rem 1.25rem 1.25rem;
+    margin: 1.75rem 0;
+  }
+  .callout[data-tone="bad"] { border-top-color: var(--bad); }
+  .callout h4 { margin: .45rem 0 .5rem; font-size: var(--t-md); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  ul.tight, ol.tight { margin: 0 0 1rem; padding-left: 1.2rem; max-width: 70ch; }
+  ul.tight li, ol.tight li { margin-bottom: .35rem; }
+
+  footer.doc-foot {
+    margin-top: 5rem;
+    padding-top: 1.25rem;
+    border-top: 2px solid var(--ink);
+    font-size: var(--t-sm);
+    color: var(--muted);
+  }
+
+  @media print {
+    body { background: #fff; }
+    .toc, .topbar { display: none; }
+    .layout { display: block; }
+    .chat, .exit, .callout, .fact { box-shadow: none; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" aria-hidden="true">
+        <rect x="2" y="2" width="7" height="7"/>
+        <rect x="15" y="2" width="7" height="7"/>
+        <rect x="2" y="15" width="7" height="7"/>
+        <rect x="15" y="15" width="3" height="3" fill="currentColor" stroke="none"/>
+        <rect x="19" y="19" width="3" height="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="brand-name">Auto Slip</span>
+      <span class="brand-sep" aria-hidden="true"></span>
+      <span class="brand-kind" data-en="System guide · Deposit Check">คู่มือระบบ · Deposit Check</span>
+    </a>
+
+    <div class="controls">
+    <div class="seg" role="group" aria-label="Language / ภาษา">
+      <button type="button" id="lang-th" aria-pressed="true">TH</button>
+      <button type="button" id="lang-en" aria-pressed="false">EN</button>
+    </div>
+    <button type="button" class="icon-btn" id="theme-toggle" aria-label="Switch theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+      <span id="theme-label" data-en="Theme">ธีม</span>
+    </button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead" id="top">
+    <h1 data-en="Auto Slip — automated deposit slip checking">Auto Slip — ระบบตรวจสลิปเงินเข้าอัตโนมัติ</h1>
+    <p class="lede" data-en="Receives slips from Telegram groups, reads the QR code, verifies it against the bank, then records it in Google Sheets — with no manual typing. Only the cases the system will not decide on its own are left for a person.">
+      รับสลิปจากกลุ่ม Telegram อ่าน QR ตรวจกับธนาคาร แล้วบันทึกลง Google Sheets
+      โดยไม่ต้องมีคนพิมพ์เอง — เหลือให้คนตัดสินเฉพาะรายการที่ระบบไม่กล้าตัดสินแทน
+    </p>
+    <div class="masthead-meta">
+      <span data-en="<b>Version</b> 1.4.2 (2026-08-09)"><b>เวอร์ชัน</b> 1.4.2 (2026-08-09)</span>
+      <span data-en="<b>Project</b> Deposit Check"><b>โปรเจกต์</b> Deposit Check</span>
+      <span data-en="<b>Groups</b> VIP_WE · VIP_12"><b>กลุ่มที่รองรับ</b> VIP_WE · VIP_12</span>
+      <span data-en="<b>Destination</b> Google Sheets"><b>ปลายทาง</b> Google Sheets</span>
+      <span data-en="<b>Day starts</b> 23:00 Bangkok"><b>วันเปลี่ยน</b> 23:00 น.</span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <nav class="toc" aria-label="สารบัญ">
+      <p class="toc-title" data-en="Contents">สารบัญ</p>
+      <ol>
+        <li><a href="#overview" data-en="What it does for you">ระบบทำอะไรให้</a></li>
+        <li class="toc-group" data-en="Part 1 — Work flow">ส่วนที่ 1 — Work flow</li>
+        <li><a href="#flow" data-en="The path of one slip">เส้นทางของสลิป 1 ใบ</a></li>
+        <li><a href="#rules" data-en="Auto-accept rules">เงื่อนไขรับอัตโนมัติ</a></li>
+        <li><a href="#special" data-en="Special cases">กรณีพิเศษ</a></li>
+        <li class="toc-group" data-en="Part 2 — Manual">ส่วนที่ 2 — คู่มือ</li>
+        <li><a href="#send" data-en="Sending a slip">วิธีส่งสลิป</a></li>
+        <li><a href="#buttons" data-en="Buttons and decisions">ปุ่มและการตัดสิน</a></li>
+        <li><a href="#commands" data-en="All commands">คำสั่งทั้งหมด</a></li>
+        <li><a href="#storage" data-en="Where data is kept">ที่เก็บข้อมูล</a></li>
+        <li><a href="#schedule" data-en="Scheduled jobs">งานอัตโนมัติ</a></li>
+        <li><a href="#monthly" data-en="Monthly task">สิ่งที่ต้องทำทุกเดือน</a></li>
+        <li><a href="#trouble" data-en="Common problems">ปัญหาที่พบบ่อย</a></li>
+        <li><a href="#accounts" data-en="Supported accounts">บัญชีที่รองรับ</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <section id="overview">
+        <h3 style="margin-top:0" data-en="What it does for you">ระบบทำอะไรให้</h3>
+        <p class="prose-narrow" data-en="The team used to open every slip, read the amount, compare the name, then type it into the sheet by hand. This system takes over the repetitive part and catches the mistakes people miss easily — the same slip sent twice, or a chat amount that does not match the slip.">
+          เดิมทีมต้องเปิดสลิปทีละใบ อ่านยอด เทียบชื่อ แล้วพิมพ์ลงชีทเอง
+          ระบบนี้เข้ามารับงานส่วนที่ทำซ้ำๆ ไป และกันความผิดพลาดที่คนมองข้ามได้ง่าย
+          เช่น สลิปใบเดิมถูกส่งซ้ำ หรือยอดในแชทไม่ตรงกับยอดบนสลิป
+        </p>
+
+        <dl class="facts">
+          <div class="fact">
+            <dt data-en="Slip checking">ตรวจสลิป</dt>
+            <dd data-en="Automatic<small>Reads the QR and confirms it with the bank via EasySlip</small>">อัตโนมัติ<small>อ่าน QR แล้วยืนยันกับธนาคารผ่าน EasySlip</small></dd>
+          </div>
+          <div class="fact">
+            <dt data-en="Recording">บันทึกลงชีท</dt>
+            <dd data-en="Automatic<small>A file per month, a tab per day</small>">อัตโนมัติ<small>แยกไฟล์รายเดือน แยกแท็บรายวัน</small></dd>
+          </div>
+          <div class="fact">
+            <dt data-en="Duplicate guard">กันสลิปซ้ำ</dt>
+            <dd data-en="Every slip<small>Remembers every QR code it has ever accepted</small>">ทุกใบ<small>จำ QR ทุกใบที่เคยใช้ไปแล้ว</small></dd>
+          </div>
+          <div class="fact">
+            <dt data-en="Approver record">บันทึกผู้อนุมัติ</dt>
+            <dd data-en="Every time<small>Keeps who pressed and when, for later review</small>">ทุกครั้ง<small>เก็บชื่อคนกดและเวลาไว้ตรวจย้อนได้</small></dd>
+          </div>
+        </dl>
+        <p class="note" data-en="Anything the system cannot decide on its own shows buttons that only authorised people can press — not everyone in the group.">
+          รายการที่ระบบตัดสินเองไม่ได้ จะขึ้นปุ่มให้คนที่มีสิทธิ์เท่านั้นเป็นคนตัดสิน
+          ไม่ใช่ทุกคนในกลุ่ม
+        </p>
+      </section>
+
+      <div class="part-head">
+        <span class="part-num" data-en="Part 1">ส่วนที่ 1</span>
+        <h2 data-en="Work flow — how the system thinks">Work flow — ระบบคิดยังไง</h2>
+        <p data-en="From the moment a photo lands in the group to the number appearing in the sheet: which checks it passes, and where the system stops to ask a person.">
+          ตั้งแต่รูปเข้ากลุ่ม จนถึงตัวเลขลงชีท ผ่านด่านอะไรบ้าง
+          และจุดไหนที่ระบบจะหยุดถามคน
+        </p>
+      </div>
+
+      <section id="flow">
+        <h3 data-en="The path of one slip">เส้นทางของสลิป 1 ใบ</h3>
+
+        <div class="legend">
+          <span><i class="lg-end" aria-hidden="true"></i><span data-en="Start">จุดเริ่ม</span></span>
+          <span><i class="lg-dot" aria-hidden="true"></i><span data-en="Automatic step">ขั้นตอนที่ระบบทำเอง</span></span>
+          <span><i class="lg-dia" aria-hidden="true"></i><span data-en="Decision point">จุดตัดสินใจ</span></span>
+        </div>
+
+        <ol class="flow">
+
+          <li class="flow-step" data-kind="start">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Someone posts a photo in the group">มีคนส่งรูปเข้ากลุ่ม</h4>
+              <p data-en="Works with normal photos and photos sent as files. Several photos at once is fine.">รองรับทั้งรูปปกติและรูปที่ส่งแบบไฟล์ ส่งทีเดียวหลายรูปก็ได้</p>
+            </div>
+          </li>
+
+          <li class="flow-step" data-kind="decision">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Does the photo come with a message?">รูปนั้นมีข้อความกำกับหรือเปล่า</h4>
+              <p data-en="People share screenshots in the group all the time, so a bare photo is not treated as a slip submission.">
+                ในกลุ่มมีการแชร์ภาพหน้าจอกันเป็นปกติ ระบบจึงถือว่ารูปเปล่า
+                ไม่ใช่การส่งสลิป
+              </p>
+              <div class="exits" data-cols="2">
+                <div class="exit">
+                  <span class="stamp" data-tone="mute" data-en="No message">ไม่มีข้อความ</span>
+                  <p data-en="Ignored silently — no reply, no record created">ผ่านไปเงียบๆ ไม่ตอบ ไม่สร้างรายการ</p>
+                </div>
+                <div class="exit">
+                  <span class="stamp" data-tone="mute" data-en="Has a message">มีข้อความ</span>
+                  <p data-en="Continue">ไปต่อ</p>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <li class="flow-step">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Read the message and scan every QR in the photo">อ่านข้อความ และสแกน QR ทุกใบในรูป</h4>
+              <p data-en="Pulls the Trans ID, name and amount out of the message, and can read more than one QR code per photo.">
+                ดึง Trans ID · ชื่อ · ยอดเงิน จากข้อความ และอ่าน QR ได้มากกว่า 1 ดวงต่อรูป
+              </p>
+            </div>
+          </li>
+
+          <li class="flow-step" data-kind="decision">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Has this slip already been used?">สลิปใบนี้เคยถูกใช้ไปแล้วหรือยัง</h4>
+              <p data-en="Checked against every QR the system has ever processed, no matter which group sent it.">เทียบกับ QR ทุกใบที่เคยผ่านระบบมา ไม่ว่าจะส่งจากกลุ่มไหน</p>
+              <div class="exits" data-cols="2">
+                <div class="exit" data-tone="warn">
+                  <span class="stamp" data-tone="warn" data-en="Duplicate">ซ้ำ</span>
+                  <p data-en="Replies in the group that it was already submitted, and records nothing">แจ้งในกลุ่มว่าเคยส่งแล้ว ไม่บันทึกซ้ำ</p>
+                </div>
+                <div class="exit">
+                  <span class="stamp" data-tone="mute" data-en="New slip">ใบใหม่</span>
+                  <p data-en="Continue">ไปต่อ</p>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <li class="flow-step" data-kind="decision">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="No QR code could be read at all">อ่าน QR ไม่ออกเลย</h4>
+              <p data-en="Blurry image, a photo of a screen, or not a real slip.">ภาพเบลอ ภาพถ่ายจากจอ หรือไม่ใช่สลิปจริง</p>
+              <div class="exits" data-cols="2">
+                <div class="exit" data-tone="bad">
+                  <span class="stamp" data-tone="bad" data-en="No amount either">ไม่มียอดในแชทด้วย</span>
+                  <p data-en="Rejected immediately — there is nothing left to record">ปฏิเสธทันที ไม่มีข้อมูลพอจะบันทึกอะไรได้</p>
+                </div>
+                <div class="exit" data-tone="warn">
+                  <span class="stamp" data-tone="warn" data-en="But the chat gave an amount">แต่แชทบอกยอดมา</span>
+                  <p data-en="Sent for a person to decide, using whatever the chat provided">ส่งให้คนตัดสิน โดยใช้ข้อมูลจากแชทเท่าที่มี</p>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <li class="flow-step">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Confirm the slip with the bank">ยืนยันสลิปกับธนาคาร</h4>
+              <p data-en="Sends the QR to EasySlip to get the sender name, the real amount and the receiving account. Several slips in one batch are totalled together.">
+                ส่ง QR ไปตรวจกับ EasySlip เพื่อดึงชื่อผู้โอน ยอดจริง และบัญชีผู้รับ
+                หลายใบในชุดเดียวจะถูกรวมยอดให้
+              </p>
+            </div>
+          </li>
+
+          <li class="flow-step" data-kind="decision">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Decide from the result">ตัดสินจากผลตรวจ</h4>
+              <p data-en="Compares what the chat claimed against what the slip actually says, on three points — name, amount, receiving account.">
+                เทียบสิ่งที่แชทแจ้ง กับสิ่งที่สลิปบอกจริง 3 ข้อ — ชื่อ ยอดเงิน บัญชีผู้รับ
+              </p>
+              <div class="exits" data-cols="3">
+                <div class="exit" data-tone="good">
+                  <span class="stamp" data-tone="good" data-en="All three pass">ผ่านครบ 3</span>
+                  <p data-en="Accepted automatically and written to the sheet — nobody needs to press anything">รับอัตโนมัติ บันทึกลงชีททันที ไม่ต้องมีคนกด</p>
+                </div>
+                <div class="exit" data-tone="bad">
+                  <span class="stamp" data-tone="bad" data-en="Amount or account wrong">ยอด/บัญชีไม่ตรง</span>
+                  <p data-en="Rejected automatically, with a reply naming exactly what did not match">ปฏิเสธอัตโนมัติ พร้อมบอกเหตุผลว่าไม่ตรงตรงไหน</p>
+                </div>
+                <div class="exit" data-tone="warn">
+                  <span class="stamp" data-tone="warn" data-en="Anything else">นอกนั้น</span>
+                  <p data-en="Shows buttons for a person to decide — for example a name mismatch, or the bank check failing">ขึ้นปุ่มให้คนตัดสิน เช่น ชื่อไม่ตรง หรือตรวจกับธนาคารไม่สำเร็จ</p>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <li class="flow-step" data-kind="decision">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="When someone presses Receive">เมื่อคนกด Receive</h4>
+              <p data-en="The system only asks for what is still missing. It never re-asks for something it already knows.">ระบบจะถามเพิ่มเฉพาะข้อมูลที่ยังขาด ไม่ถามซ้ำในสิ่งที่รู้อยู่แล้ว</p>
+              <div class="exits" data-cols="2">
+                <div class="exit" data-tone="warn">
+                  <span class="stamp" data-tone="warn" data-en="Amount unknown">ไม่รู้ยอด</span>
+                  <p data-en="Asks you to reply with the amount before going further">ขอให้พิมพ์ยอดตอบกลับมา ก่อนไปขั้นถัดไป</p>
+                </div>
+                <div class="exit" data-tone="warn">
+                  <span class="stamp" data-tone="warn" data-en="Account unknown">ไม่รู้บัญชี</span>
+                  <p data-en="Shows buttons to pick the receiving account">ขึ้นปุ่มให้เลือกบัญชีปลายทาง</p>
+                </div>
+              </div>
+            </div>
+          </li>
+
+          <li class="flow-step">
+            <div class="flow-marker" aria-hidden="true"></div>
+            <div class="flow-body">
+              <h4 data-en="Write to that day's sheet">บันทึกลงชีทของวันนั้น</h4>
+              <p data-en="Writes into the current day's tab together with the approver's name, then closes the buttons on the original message so nobody can press twice. The Time column holds the transfer time read from the slip — not the moment the button was pressed — so a slip left overnight still shows when the money actually moved. A picture holding two slips gets both times, separated by a comma.">
+                เขียนลงแท็บวันที่ปัจจุบัน พร้อมบันทึกชื่อผู้อนุมัติ
+                แล้วปิดปุ่มบนข้อความเดิมเพื่อไม่ให้มีใครกดซ้ำ
+                ช่อง Time ใช้<b>เวลาโอนที่อ่านจากสลิป</b> ไม่ใช่เวลาที่กดปุ่ม
+                สลิปที่ค้างข้ามคืนแล้วเพิ่งมากด จึงยังเห็นเวลาที่เงินออกจริง
+                ถ้ารูปเดียวมีสองสลิป จะใส่เวลาทั้งสองใบคั่นด้วยจุลภาค
+              </p>
+            </div>
+          </li>
+
+        </ol>
+      </section>
+
+      <section id="rules">
+        <h3 data-en="Auto-accept rules">เงื่อนไขรับอัตโนมัติ</h3>
+        <p class="prose-narrow" data-en="The system only records a slip on its own when <b>all three</b> pass. If even one fails, it never goes quiet — it always replies in the group.">
+          ระบบจะบันทึกให้เองก็ต่อเมื่อ <b>ผ่านครบทั้ง 3 ข้อ</b> ถ้าติดแม้ข้อเดียว
+          จะไม่บันทึกเงียบๆ แต่จะแจ้งกลับเข้ากลุ่มเสมอ
+        </p>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="The three required checks">สามข้อที่ต้องผ่าน</caption>
+            <thead>
+              <tr>
+                <th style="width:1%" data-en="#">ข้อ</th>
+                <th data-en="Checks">ตรวจอะไร</th>
+                <th data-en="Passes when">ผ่านเมื่อ</th>
+                <th data-en="If it fails">ถ้าไม่ผ่าน</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">1</td>
+                <td data-en="<b>Sender name</b>"><b>ชื่อผู้โอน</b></td>
+                <td data-en="The name on the slip matches the name given in chat. Titles are stripped, writing the name in two languages separated by <code>/</code> counts as a match on either one, and multi-word Thai surnames such as <b>ณ ร้อยเอ็ด</b> are handled — the bank shortens the surname to one letter, and any word of the surname may be the one it shows.">ชื่อบนสลิปตรงกับชื่อที่แชทแจ้ง ตัดคำนำหน้าให้ เขียนสองภาษาคั่นด้วย <code>/</code> ตรงกับแบบใดแบบหนึ่งก็ผ่าน และรองรับนามสกุลไทยที่มีหลายคำอย่าง <b>ณ ร้อยเอ็ด</b> — ธนาคารย่อนามสกุลเหลือตัวเดียว จึงรับได้ว่าตัวนั้นมาจากคำไหนของนามสกุลก็ได้</td>
+                <td><span class="stamp" data-tone="warn" data-en="Ask a person">ให้คนตัดสิน</span></td>
+              </tr>
+              <tr>
+                <td class="num">2</td>
+                <td data-en="<b>Amount</b>"><b>ยอดเงิน</b></td>
+                <td data-en="The slip amount matches the chat amount. Multiple slips are totalled first.">ยอดบนสลิปตรงกับยอดที่แชทแจ้ง หลายใบให้รวมยอดก่อนเทียบ</td>
+                <td><span class="stamp" data-tone="bad" data-en="Auto reject">ปฏิเสธอัตโนมัติ</span></td>
+              </tr>
+              <tr>
+                <td class="num">3</td>
+                <td data-en="<b>Receiving account</b>"><b>บัญชีผู้รับ</b></td>
+                <td data-en="The account number on the slip matches a registered company account. If the slip clearly shows a different account, it is rejected no matter what the message says — a typo in the message cannot make money arrive in our account.">เลขบัญชีบนสลิปตรงกับบัญชีบริษัทที่ลงทะเบียนไว้ ถ้าสลิปบอกชัดว่าเป็นบัญชีอื่น จะปฏิเสธทันทีไม่ว่าข้อความจะเขียนว่าอะไร — ข้อความพิมพ์ผิดไม่ทำให้เงินเข้าบัญชีเรา</td>
+                <td><span class="stamp" data-tone="bad" data-en="Auto reject">ปฏิเสธอัตโนมัติ</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="prose-narrow note" data-en="A name mismatch is not rejected outright because the name on a slip and the name typed in chat often differ over something trivial — a dropped letter, or a nickname. That does not mean the money never arrived. An amount or an account, once wrong, is simply wrong.">
+          เหตุผลที่ชื่อไม่ตรงแล้วไม่ปฏิเสธทันที เพราะชื่อบนสลิปกับชื่อที่พิมพ์ในแชท
+          มักต่างกันด้วยเรื่องเล็กน้อย เช่น สะกดตก หรือใช้ชื่อเล่น
+          ซึ่งไม่ได้แปลว่าเงินไม่เข้า — ต่างจากยอดเงินและบัญชีที่ผิดแล้วผิดเลย
+        </p>
+      </section>
+
+      <section id="special">
+        <h3 data-en="Cases the system will not decide on its own">กรณีพิเศษที่ระบบจะไม่ตัดสินเอง</h3>
+        <p class="prose-narrow" data-en="In some situations the data looks complete but cannot be trusted. The system always hands these to a person, even when everything appears to match.">
+          บางสถานการณ์ข้อมูลดูเหมือนครบ แต่เชื่อไม่ได้จริง ระบบจะส่งให้คนดูเสมอ
+          แม้ทุกอย่างจะดูตรงกันก็ตาม
+        </p>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="Situations that force a human decision">สถานการณ์ที่บังคับให้คนตัดสิน</caption>
+            <thead>
+              <tr><th data-en="Situation">สถานการณ์</th><th data-en="Why">เหตุผล</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-en="<b>Several slips in one batch</b><br><span class=&quot;cmt&quot;>Multiple QR codes in one photo, or several photos at once</span>"><b>หลายสลิปในชุดเดียว</b><br><span class="cmt">1 รูปมีหลาย QR หรือส่งหลายรูปพร้อมกัน</span></td>
+                <td data-en="The total may match, but matching each slip to the right person needs human confirmation">ยอดรวมอาจตรง แต่การจับคู่ว่าใบไหนเป็นของใครต้องให้คนยืนยัน</td>
+              </tr>
+              <tr>
+                <td data-en="<b>Bank check failed</b><br><span class=&quot;cmt&quot;>The service is down, or the API key expired</span>"><b>ตรวจกับธนาคารไม่สำเร็จ</b><br><span class="cmt">ระบบธนาคารล่ม หรือคีย์หมดอายุ</span></td>
+                <td data-en="With nothing from the bank to compare against, the chat alone cannot be trusted">ไม่มีข้อมูลจากฝั่งธนาคารมาเทียบ จะเชื่อแชทฝ่ายเดียวไม่ได้</td>
+              </tr>
+              <tr>
+                <td data-en="<b>The message does not add up</b><br><span class=&quot;cmt&quot;>For example it says 100+100 = 300</span>"><b>ข้อความบวกเลขไม่ลง</b><br><span class="cmt">เช่น พิมพ์ว่า 100+100 = 300</span></td>
+                <td data-en="The numbers in chat contradict each other, so either one could be wrong — and it must not be auto-rejected either, because the sender may simply have mistyped the total while the money did arrive">ตัวเลขในแชทขัดแย้งกันเอง จะยึดตัวไหนก็ผิดได้ทั้งคู่ — และห้ามปฏิเสธอัตโนมัติด้วย เพราะอาจแค่พิมพ์ผลรวมผิด ทั้งที่เงินเข้าจริง</td>
+              </tr>
+              <tr>
+                <td data-en="<b>No QR readable, but the chat gave an amount</b>"><b>อ่าน QR ไม่ออก แต่แชทบอกยอด</b></td>
+                <td data-en="It can still be recorded from the chat, but there is no bank-side proof">ยังบันทึกได้จากข้อมูลในแชท แต่ไม่มีหลักฐานฝั่งธนาคารยืนยัน</td>
+              </tr>
+              <tr>
+                <td data-en="<b>An amount label is there but the number cannot be read</b><br><span class=&quot;cmt&quot;>an unfamiliar way of writing it, or a zero</span>"><b>มีป้ายบอกยอด แต่อ่านตัวเลขไม่ออก</b><br><span class="cmt">เขียนในรูปแบบที่ระบบยังไม่รู้จัก หรือใส่เป็นศูนย์</span></td>
+                <td data-en="&quot;The system could not read it&quot; is not the same as &quot;they did not report it&quot;. It is never rejected automatically — the message shows the line it could not read, so it can be reported and supported later.">"ระบบอ่านไม่ออก" ไม่เหมือนกับ "เขาไม่ได้แจ้ง" จึงไม่ปฏิเสธอัตโนมัติเด็ดขาด และจะโชว์บรรทัดที่อ่านไม่ออกให้เห็น เพื่อเอาไปแจ้งให้รองรับเพิ่มได้</td>
+              </tr>
+              <tr>
+                <td data-en="<b>No label at all, but a number matches the slip</b><br><span class=&quot;cmt&quot;>for example a message that is only a username, a name and 2,000</span>"><b>ไม่มีป้ายเลย แต่มีตัวเลขตรงกับสลิป</b><br><span class="cmt">เช่นข้อความที่มีแค่ชื่อผู้ใช้ ชื่อ และ 2,000</span></td>
+                <td data-en="The number is probably the amount, but nothing confirms it. Shown for confirmation instead of being rejected — never counted as a pass, because a message reading 100+100 would otherwise let a half payment through.">น่าจะเป็นยอด แต่ไม่มีอะไรยืนยัน จึงส่งให้ยืนยันแทนการปฏิเสธ — และไม่นับว่าผ่านเด็ดขาด ไม่งั้นข้อความแบบ 100+100 ที่ได้เงินมาครึ่งเดียวจะหลุดไปได้</td>
+              </tr>
+              <tr>
+                <td data-en="<b>The receiving account cannot be identified</b><br><span class=&quot;cmt&quot;>the slip hides too many digits</span>"><b>ชี้ไม่ได้ว่าเข้าบัญชีไหน</b><br><span class="cmt">สลิปปิดบังเลขไว้มากเกินไป</span></td>
+                <td data-en="&quot;Cannot tell&quot; is not the same as &quot;not ours&quot;. Only an account the slip clearly shows as someone else's is rejected automatically.">"บอกไม่ได้" ไม่เหมือนกับ "ไม่ใช่ของเรา" ระบบจะปฏิเสธอัตโนมัติเฉพาะบัญชีที่สลิปบอกชัดว่าเป็นของคนอื่นเท่านั้น</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="part-head">
+        <span class="part-num" data-en="Part 2">ส่วนที่ 2</span>
+        <h2 data-en="User manual">คู่มือใช้งาน</h2>
+        <p data-en="What the team needs for day-to-day use, and the one task that must be done by hand every month.">สิ่งที่ทีมต้องรู้เพื่อใช้งานประจำวัน และสิ่งที่ต้องทำเองทุกเดือน</p>
+      </div>
+
+      <section id="send">
+        <h3 data-en="Sending a slip">วิธีส่งสลิป</h3>
+        <p class="prose-narrow" data-en="Just post the <b>photo together with a message</b> in the group. No command needed. The system reads many message styles, so not everyone has to type the same way.">
+          ส่ง <b>รูปพร้อมข้อความกำกับ</b> เข้ากลุ่มได้เลย ไม่ต้องพิมพ์คำสั่งอะไร
+          ระบบอ่านข้อความหลายรูปแบบได้ ไม่บังคับให้ทุกคนพิมพ์เหมือนกัน
+        </p>
+
+        <h4 data-en="Messages the system can read">ข้อความที่ระบบอ่านออก</h4>
+        <div class="chat">
+          <div class="chat-head" data-en="Real examples that work">ตัวอย่างที่ใช้ได้จริง</div>
+<pre>TRANS ID : 7080338
+FULL NAME : อานนท์ กำฟิษร
+AMOUNT THB : 1,100.00
+
+Hi team, User :  ari879565
+Amount : THB  500.00
+
+Username: mongmadona
+Amount 400 HB
+
+Trx. Date: 2026-08-02
+Trans ID: 1333805
+Name: ภานุพงษ์ ภัทรพงษ์เวชน์
+Bank Name: KBANK / ธ.กสิกรไทย
+Account No: 2273266332
+Amount: 1,000.00</pre>
+        </div>
+
+        <p class="prose-narrow" data-en="The system looks for <b>labels</b>, which makes it flexible about formatting — with or without a <code>:</code>, with a greeting in front, and any spacing or line breaks.">
+          ระบบมองหา <b>ป้ายกำกับ</b> เป็นหลัก จึงยืดหยุ่นเรื่องรูปแบบได้มาก —
+          มีหรือไม่มีเครื่องหมาย <code>:</code> ก็ได้ มีคำทักทายนำหน้าก็ได้
+          เว้นวรรคหรือขึ้นบรรทัดยังไงก็ได้
+        </p>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="Supported labels">ป้ายกำกับที่รองรับ</caption>
+            <thead>
+              <tr><th data-en="Field">ข้อมูล</th><th data-en="Accepted spellings">เขียนได้แบบไหนบ้าง</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-en="<b>Transaction ID</b>"><b>รหัสรายการ</b></td>
+                <td><code>TRANS ID</code> <code>Trans ID</code> <code>Trx ID</code> <code>Trx. ID</code> <code>Transaction ID</code> <code>Ref ID</code></td>
+              </tr>
+              <tr>
+                <td data-en="<b>Username</b>"><b>ชื่อผู้ใช้</b></td>
+                <td><code>User</code> <code>User ID</code> <code>Username</code> <code>Member ID</code></td>
+              </tr>
+              <tr>
+                <td data-en="<b>Sender name</b>"><b>ชื่อผู้โอน</b></td>
+                <td><code>FULL NAME</code> <code>Name</code> <code>Sender Name</code> <code>ชื่อผู้โอน</code></td>
+              </tr>
+              <tr>
+                <td data-en="<b>Amount</b>"><b>ยอดเงิน</b></td>
+                <td data-en="<code>Amount</code> <code>AMOUNT THB</code> <code>ยอดเงิน</code> <code>จำนวนเงิน</code> — addition works too, e.g. <code>100+100 = 200</code>"><code>Amount</code> <code>AMOUNT THB</code> <code>ยอดเงิน</code> <code>จำนวนเงิน</code> — บวกกันได้ เช่น <code>100+100 = 200</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="stamp" data-tone="warn" data-en="Watch out">ข้อควรระวัง</span>
+          <h4 data-en="Without an amount label, the system will not guess">ถ้าไม่มีป้ายบอกยอด ระบบจะไม่เดาให้</h4>
+          <p style="margin-bottom:0" data-en="A message like <code>please check this 500 deposit</code> counts as <b>no amount given</b>. The system deliberately refuses to scan loose numbers — otherwise an account number or a date would get picked up as the amount. Write <code>Amount: 500</code> instead.">
+            ข้อความอย่าง <code>ช่วยเช็คยอด 500 ให้หน่อย</code> จะถูกมองว่า
+            <b>ไม่ได้แจ้งยอด</b> เพราะระบบจงใจไม่กวาดตัวเลขทั่วข้อความมาใช้ —
+            ไม่อย่างนั้นเลขบัญชีหรือวันที่จะถูกหยิบมาเป็นยอดเงินโดยไม่ตั้งใจ
+            ให้เขียนว่า <code>Amount: 500</code> แทน
+          </p>
+        </div>
+      </section>
+
+      <section id="buttons">
+        <h3 data-en="Buttons and decisions">ปุ่มและการตัดสิน</h3>
+        <p class="prose-narrow" data-en="When the system cannot decide, it posts a summary of the checks with two buttons. Only people on the approver list can press them — <b>group admins do not get this right automatically</b>.">
+          เมื่อระบบตัดสินเองไม่ได้ จะขึ้นข้อความสรุปผลตรวจพร้อมปุ่ม 2 ปุ่ม
+          กดได้เฉพาะคนที่อยู่ในรายชื่อผู้อนุมัติเท่านั้น — <b>แอดมินกลุ่มไม่ได้สิทธิ์นี้อัตโนมัติ</b>
+        </p>
+
+        <div class="chat">
+          <div class="chat-head" data-en="What the bot replies">ตัวอย่างข้อความที่บอทส่งกลับ</div>
+<pre>⚠️ Manual review required
+
+❌ Amount does not match
+   Slip: 200.00 THB
+   Chat: 300.00 THB
+✅ Name นาย ดุลยฤทธิ์ ส
+✅ Account KKP-LS
+
+Choose Receive to save it to today's sheet, or Reject to discard it.
+
+            [ ❌ Reject ]   [ ✅ Receive ]</pre>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="What each button does">ปุ่มทำอะไร</caption>
+            <thead><tr><th data-en="Button">ปุ่ม</th><th data-en="What happens">ผลที่เกิดขึ้น</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="stamp" data-tone="good">Receive</span></td>
+                <td data-en="Writes to that day's sheet. A Duplicate button also appears when the system suspects the same money was already recorded. If anything is missing the system asks first — it requests the amount or the transfer time as a reply, or shows buttons to pick the account.">
+                  บันทึกลงชีทของวันนั้น ถ้าระบบสงสัยว่าซ้ำจะมีปุ่ม Duplicate เพิ่มมาให้ด้วย ถ้ายังขาดข้อมูล ระบบจะถามเพิ่มก่อน —
+                  ไม่รู้ยอดจะขอให้พิมพ์ยอดตอบกลับ ไม่รู้เวลาโอนจะขอให้พิมพ์เวลาจากหน้าสลิป
+                  ไม่รู้บัญชีจะขึ้นปุ่มให้เลือก
+                </td>
+              </tr>
+              <tr>
+                <td><span class="stamp" data-tone="warn">🔄 Check again</span></td>
+                <td data-en="Asks the bank again using the QR codes already on file — no need to send the slip in again. Appears whenever verification failed. While the bank is still confirming a transfer, Receive is hidden on purpose: waiting is the right answer and it clears within a minute.">
+                  เอา QR ชุดเดิมไปถามธนาคารใหม่ ไม่ต้องส่งสลิปเข้ามาใหม่
+                  ขึ้นทุกครั้งที่ตรวจกับธนาคารไม่สำเร็จ
+                  ถ้าเป็นกรณีธนาคารยังยืนยันไม่เสร็จ ปุ่ม Receive จะถูกซ่อนไว้ตั้งใจ
+                  เพราะการรอคือคำตอบที่ถูกและมักหายเองใน 1–2 นาที
+                </td>
+              </tr>
+              <tr>
+                <td><span class="stamp" data-tone="warn">➕ Add QR</span></td>
+                <td data-en="Tells the bot the picture holds a slip it could not read. Reply with the QR of the missed slip; everything already read is kept and the whole set is checked again. Also appears on a rejection caused by a mismatched amount.">
+                  บอกบอทว่าในรูปมีสลิปที่มันอ่านไม่เจอ ตอบกลับด้วย QR ของใบที่ขาด
+                  ดวงที่อ่านได้แล้วยังอยู่ครบ แล้วตรวจใหม่ทั้งชุด
+                  ปุ่มนี้ขึ้นบนข้อความปฏิเสธที่เกิดจากยอดไม่ตรงด้วย
+                </td>
+              </tr>
+              <tr>
+                <td><span class="stamp" data-tone="bad">Reject</span></td>
+                <td data-en="Records nothing, and unlocks the slip so the same one can be sent again after a correction">ไม่บันทึกอะไรเลย และปลดล็อกให้ส่งสลิปใบเดิมเข้ามาแก้ตัวใหม่ได้</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 data-en="Already handled for you">สิ่งที่ระบบกันไว้ให้แล้ว</h4>
+        <ul class="tight">
+          <li data-en="<b>Two people pressing at once</b> — the first press wins, the rest are told it was already decided. Double recording is impossible."><b>กดพร้อมกันหลายคน</b> — คนแรกที่กดชนะ คนที่เหลือจะเห็นว่ารายการถูกตัดสินไปแล้ว ไม่มีทางบันทึกซ้ำ</li>
+          <li data-en="<b>Buttons left on screen</b> — once a slip is finished, the buttons on the original message are closed automatically."><b>ปุ่มค้างบนจอ</b> — เมื่อรายการจบแล้ว ปุ่มบนข้อความเดิมจะถูกปิดให้อัตโนมัติ</li>
+          <li data-en="<b>The bot going down mid-way</b> — anything left hanging is recovered and reported back to the group when it restarts."><b>บอทดับกลางคัน</b> — รายการที่ค้างอยู่จะถูกกู้และแจ้งกลับเข้ากลุ่มตอนบอทกลับมา</li>
+          <li data-en="<b>A failed write</b> — the buttons come back so it can be retried, instead of getting stuck and blocking a resend."><b>บันทึกไม่สำเร็จ</b> — ปุ่มจะกลับมาให้กดใหม่ ไม่ค้างจนส่งสลิปซ้ำไม่ได้</li>
+        </ul>
+      </section>
+
+      <section id="commands">
+        <h3 data-en="All commands">คำสั่งทั้งหมด</h3>
+        <p class="prose-narrow" data-en="Type <code>/</code> in the group and the menu appears by itself.">พิมพ์ <code>/</code> ในกลุ่มแล้วเมนูจะขึ้นให้เลือกเอง</p>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="Anyone can use">ใครก็ใช้ได้</caption>
+            <thead><tr><th style="width:1%" data-en="Command">คำสั่ง</th><th data-en="Purpose">ใช้ทำอะไร</th></tr></thead>
+            <tbody>
+              <tr><td><code>/status</code></td><td data-en="See how a slip ended — reply to the slip photo, or type <code>/status 0000123</code>. Lays out the same slip-vs-chat comparison the bot shows when it asks in the group, the transfer time read from the slip, then the full history of who did what and when, a link back to the original message, and the batch id.">ดูว่าสลิปใบนั้นจบยังไง — reply ที่รูปสลิป หรือพิมพ์ <code>/status 0000123</code> ก็ได้ กางผลเทียบสลิปกับข้อความแบบเดียวกับตอนที่บอทถามในกลุ่ม พร้อมเวลาโอนที่อ่านจากสลิป ตามด้วยประวัติทั้งหมดว่าใครทำอะไรตอนไหน พร้อมลิงก์กลับไปข้อความต้นทางและรหัสชุด</td></tr>
+              <tr><td><code>/status -b</code></td><td data-en="Look a slip up by its batch id instead — <code>/status -b 4f3c9a2b</code>. The id is shown at the bottom of every status reply, and a few characters are enough.">ค้นด้วยรหัสชุดแทน — <code>/status -b 4f3c9a2b</code> รหัสอยู่ท้ายข้อความของ <code>/status</code> ทุกครั้ง และพิมพ์แค่ไม่กี่ตัวก็พอ</td></tr>
+              <tr><td><code>/myid</code></td><td data-en="Show your own Telegram ID, needed when requesting approval rights">ดูเลข Telegram ID ของตัวเอง ใช้ตอนขอสิทธิ์อนุมัติ</td></tr>
+              <tr><td><code>/help</code></td><td data-en="List every command">รายการคำสั่งทั้งหมด</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="Approvers only">เฉพาะผู้อนุมัติ</caption>
+            <thead><tr><th style="width:1%" data-en="Command">คำสั่ง</th><th data-en="Purpose">ใช้ทำอะไร</th></tr></thead>
+            <tbody>
+              <tr><td><code>/pending</code></td><td data-en="Slips still waiting for a decision, with links that jump to the message">สลิปที่ยังรอการตัดสิน พร้อมลิงก์กระโดดไปที่ข้อความนั้น</td></tr>
+              <tr><td><code>/recheck</code></td><td data-en="Send a rejected slip back to be decided again — reply to the slip photo. Used when the system rejected it by mistake. It does not verify with the bank again; it just brings the buttons back. A slip already saved to the sheet cannot be sent back.">ส่งสลิปที่ถูกปฏิเสธกลับมาตัดสินใหม่ — reply ที่รูปสลิป ใช้ตอนระบบปฏิเสธผิด ไม่ได้ไปตรวจกับธนาคารซ้ำ แค่เอาปุ่มกลับมาให้กด ใบที่บันทึกลงชีทไปแล้วส่งกลับไม่ได้</td></tr>
+              <tr><td><code>/today</code></td><td data-en="Today's totals — how many accepted, rejected, still waiting, and the total amount">ยอดรวมของวันนี้ — รับกี่ใบ ปฏิเสธกี่ใบ ค้างกี่ใบ รวมเงินเท่าไหร่</td></tr>
+              <tr><td><code>/health</code></td><td data-en="System check — database, this month's sheet, next month's sheet, and the scheduled jobs">ตรวจสุขภาพระบบ — ฐานข้อมูล ไฟล์ชีทเดือนนี้ ไฟล์เดือนหน้า และงานที่ตั้งเวลาไว้</td></tr>
+              <tr><td><code>/approvers</code></td><td data-en="See who can approve slips">ดูรายชื่อคนที่กดปุ่มได้</td></tr>
+              <tr><td><code>/approver_add</code></td><td data-en="Add someone — reply to their message and type the command">เพิ่มคนใหม่ — reply ที่ข้อความของคนนั้นแล้วพิมพ์คำสั่ง</td></tr>
+              <tr><td><code>/approver_remove</code></td><td data-en="Take the right away">ถอนสิทธิ์</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="prose-narrow note" data-en="Every approver can add or remove others, except the system owners set in the configuration file — those cannot be removed by command. They are the spare key in case of a database problem.">
+          ผู้อนุมัติทุกคนเพิ่มหรือถอนคนอื่นได้ ยกเว้นเจ้าของระบบที่ตั้งไว้ในไฟล์ตั้งค่า
+          ซึ่งถอนผ่านคำสั่งไม่ได้ — เป็นกุญแจสำรองเผื่อกรณีฐานข้อมูลมีปัญหา
+        </p>
+      </section>
+
+      <section id="storage">
+        <h3 data-en="Where data is kept">ที่เก็บข้อมูล</h3>
+        <p class="prose-narrow" data-en="The system writes into Google Drive using this structure, and looks the file up fresh on every write — so if someone moves or recreates a file, it is found without a restart.">
+          ระบบเขียนลง Google Drive ตามโครงสร้างนี้ และจะหาไฟล์ใหม่ทุกครั้งที่เขียน
+          ถ้ามีคนย้ายหรือสร้างไฟล์ใหม่ ระบบจะเจอเองโดยไม่ต้องรีสตาร์ท
+        </p>
+
+        <div class="chat">
+          <div class="chat-head" data-en="Structure in Drive">โครงสร้างใน Drive</div>
+<pre>Deposit check/                 <span class="cmt" data-en="root folder">โฟลเดอร์หลัก</span>
+└── Deposit-2026/              <span class="cmt" data-en="one per year">แยกตามปี</span>
+    ├── check_08-2026          <span class="cmt" data-en="August's file">ไฟล์ของเดือนสิงหาคม</span>
+    │   ├── 01-08-2026         <span class="cmt" data-en="daily tabs">แท็บรายวัน</span>
+    │   ├── 02-08-2026
+    │   └── 03-08-2026
+    └── check_09-2026          <span class="cmt" data-en="September's file">ไฟล์ของเดือนกันยายน</span></pre>
+        </div>
+
+        <ul class="tight">
+          <li data-en="<b>Year folder</b> — <code>Deposit-YYYY</code>, e.g. <code>Deposit-2026</code>"><b>โฟลเดอร์ปี</b> — <code>Deposit-YYYY</code> เช่น <code>Deposit-2026</code></li>
+          <li data-en="<b>Month file</b> — <code>check_MM-YYYY</code>, e.g. <code>check_08-2026</code>"><b>ไฟล์เดือน</b> — <code>check_MM-YYYY</code> เช่น <code>check_08-2026</code></li>
+          <li data-en="<b>Day tab</b> — <code>DD-MM-YYYY</code>, e.g. <code>04-08-2026</code>"><b>แท็บวัน</b> — <code>DD-MM-YYYY</code> เช่น <code>04-08-2026</code></li>
+        </ul>
+
+        <h4 data-en="A business day starts at 23:00">วันของระบบเริ่มตอน 5 ทุ่ม</h4>
+        <p class="prose-narrow" data-en="The day changes at <b>23:00</b>, not midnight. A slip that arrives at 23:30 tonight is recorded as <b>tomorrow</b> — that is where the tab, the totals, and the sheet all put it.">
+          ระบบเปลี่ยนวันตอน <b>23:00 น.</b> ไม่ใช่เที่ยงคืน
+          สลิปที่เข้ามาเวลา 23:30 คืนนี้ จะถูกบันทึกเป็นของ <b>วันพรุ่งนี้</b> —
+          ทั้งแท็บ ยอดรวม และชีท นับตรงกันหมด
+        </p>
+
+        <div class="chat">
+          <div class="chat-head" data-en="Example — night of 6 August">ตัวอย่าง — คืนวันที่ 6 สิงหาคม</div>
+<pre><span data-en="22:59  →  tab 06-08-2026    (still today)">22:59  →  แท็บ 06-08-2026    (ยังเป็นวันนี้)</span>
+<span data-en="23:00  →  tab 07-08-2026    (a new day has started)">23:00  →  แท็บ 07-08-2026    (ขึ้นวันใหม่แล้ว)</span>
+<span data-en="00:30  →  tab 07-08-2026    (unchanged)">00:30  →  แท็บ 07-08-2026    (เหมือนเดิม)</span></pre>
+        </div>
+
+        <div class="callout">
+          <span class="stamp" data-tone="warn" data-en="Note">ข้อควรรู้</span>
+          <h4 data-en="The month changes at 23:00 too">เดือนก็เปลี่ยนตอน 5 ทุ่มเหมือนกัน</h4>
+          <p style="margin-bottom:0" data-en="A slip at 23:30 on 31 August goes into <code>check_09-2026</code>, not <code>check_08-2026</code>. It has to work this way — otherwise a tab named <code>01-09-2026</code> would end up inside August's file.">
+            สลิปเวลา 23:30 ของวันที่ 31 สิงหาคม จะไปลงไฟล์ <code>check_09-2026</code>
+            ไม่ใช่ <code>check_08-2026</code> — จำเป็นต้องเป็นแบบนี้
+            ไม่งั้นแท็บชื่อ <code>01-09-2026</code> จะไปโผล่อยู่ในไฟล์ของเดือนสิงหาคม
+          </p>
+        </div>
+      </section>
+
+      <section id="schedule">
+        <h3 data-en="Scheduled jobs">งานอัตโนมัติตามเวลา</h3>
+        <div class="table-scroll">
+          <table>
+            <caption data-en="Bangkok time">เวลากรุงเทพ</caption>
+            <thead><tr><th style="width:1%" data-en="Time">เวลา</th><th data-en="Job">งาน</th><th data-en="Detail">รายละเอียด</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="num" data-en="<b>22:59</b><br><span class=&quot;cmt&quot; style=&quot;font-size:var(--t-xs)&quot;>every day</span>"><b>22:59</b><br><span class="cmt" style="font-size:var(--t-xs)">ทุกวัน</span></td>
+                <td data-en="Create tomorrow's tab">สร้างแท็บของวันพรุ่งนี้</td>
+                <td data-en="Runs one minute before the new business day begins, with headers and account options ready, so the first slip of the day records immediately without waiting.">ทำงาน 1 นาทีก่อนวันธุรกิจใหม่เริ่ม พร้อมหัวตารางและตัวเลือกบัญชี สลิปใบแรกของวันจึงบันทึกได้ทันทีโดยไม่ต้องรอ</td>
+              </tr>
+              <tr>
+                <td class="num" data-en="<b>21:00</b><br><span class=&quot;cmt&quot; style=&quot;font-size:var(--t-xs)&quot;>last day of month</span>"><b>21:00</b><br><span class="cmt" style="font-size:var(--t-xs)">วันสุดท้ายของเดือน</span></td>
+                <td data-en="Remind about next month's file">เตือนสร้างไฟล์เดือนใหม่</td>
+                <td data-en="Checks whether next month's file exists yet. If it does not, it posts a reminder in the group. If it does, it stays quiet.">ตรวจว่าไฟล์ของเดือนถัดไปมีหรือยัง ถ้ายังไม่มีจะแจ้งเข้ากลุ่ม ถ้ามีแล้วจะเงียบ</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="monthly">
+        <h3 data-en="The monthly task">สิ่งที่ต้องทำเองทุกเดือน</h3>
+
+        <div class="callout" data-tone="bad">
+          <span class="stamp" data-tone="bad" data-en="Needs a person">ต้องมีคนทำ</span>
+          <h4 data-en="Create next month's sheet before the month turns">สร้างไฟล์ชีทของเดือนใหม่ก่อนขึ้นเดือน</h4>
+          <p data-en="The account the system uses to reach Google is a service account, which Google gives no storage — so it <b>cannot create files itself</b>. It can only write into a file a person has created.">
+            บัญชีที่ระบบใช้เชื่อม Google เป็นบัญชีสำหรับโปรแกรม
+            ซึ่ง Google ไม่ให้พื้นที่เก็บไฟล์ จึง <b>สร้างไฟล์ใหม่เองไม่ได้</b>
+            ระบบเข้าไปเขียนในไฟล์ที่คนสร้างไว้ให้เท่านั้น
+          </p>
+          <p data-en="The system posts a reminder in the group <b>2 hours before the month turns</b> if the file is missing. What to do:">
+            ระบบจะเตือนเข้ากลุ่มล่วงหน้า <b>2 ชั่วโมงก่อนขึ้นเดือนใหม่</b>
+            ถ้ายังไม่มีไฟล์ สิ่งที่ต้องทำคือ:
+          </p>
+          <ol class="tight" style="margin-bottom:.75rem">
+            <li data-en="Create a Google Sheets file named <code>check_MM-YYYY</code> for next month">สร้างไฟล์ Google Sheets ชื่อ <code>check_MM-YYYY</code> ของเดือนถัดไป</li>
+            <li data-en="Put it in that year's <code>Deposit-YYYY</code> folder (create the year folder too if it does not exist)">วางไว้ในโฟลเดอร์ <code>Deposit-YYYY</code> ของปีนั้น (ถ้ายังไม่มีโฟลเดอร์ปี ให้สร้างด้วย)</li>
+          </ol>
+          <p data-en="<b>No need to share each new file.</b> The root <code>Deposit check</code> folder was shared with the system once during setup — anything created inside it after that inherits access automatically. Just put it in the right place.">
+            <b>ไม่ต้องแชร์ไฟล์ใหม่ทุกเดือน</b> — โฟลเดอร์หลัก <code>Deposit check</code>
+            ถูกแชร์ให้ระบบไว้แล้วครั้งเดียวตอนติดตั้ง ไฟล์และโฟลเดอร์ที่สร้างข้างในหลังจากนั้น
+            จะได้สิทธิ์ตามลงมาเองอัตโนมัติ ขอแค่วางไว้ให้ถูกที่
+          </p>
+          <p style="margin-bottom:0" data-en="Check that it worked with <code>/health</code> — it reports the status of both this month's and next month's file.">
+            ตรวจว่าเรียบร้อยแล้วหรือยังด้วยคำสั่ง <code>/health</code> —
+            จะบอกสถานะไฟล์ทั้งเดือนนี้และเดือนหน้า
+          </p>
+        </div>
+      </section>
+
+      <section id="trouble">
+        <h3 data-en="Common problems">ปัญหาที่พบบ่อย</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th data-en="Symptom">อาการ</th><th data-en="Cause and fix">สาเหตุและวิธีแก้</th></tr></thead>
+            <tbody>
+              <tr>
+                <td data-en="<b>Posted a photo, the bot said nothing</b>"><b>ส่งรูปแล้วบอทเงียบ</b></td>
+                <td data-en="The photo had no message with it, so it was not treated as a slip. Send it again with the details typed alongside.">รูปนั้นไม่มีข้อความกำกับ ระบบถือว่าไม่ใช่การส่งสลิป — ส่งใหม่พร้อมพิมพ์ข้อมูลกำกับ</td>
+              </tr>
+              <tr>
+                <td data-en="<b>It says <code>Duplicate slip</code></b>"><b>ขึ้นว่า <code>Duplicate slip</code></b></td>
+                <td data-en="This slip has already been through the system. The reply says how the first one ended and links straight to it, so there is no need to search for it. If it was rejected, the slip can be sent again right away.">สลิปใบนี้เคยผ่านระบบไปแล้ว ข้อความตอบกลับจะบอกว่าใบแรกจบยังไงพร้อมลิงก์ไปหา ไม่ต้องไล่หาเอง ถ้าใบแรกถูก Reject จะส่งใหม่ได้เลย</td>
+              </tr>
+              <tr>
+                <td data-en="<b>It says <code>Slip verification failed</code></b>"><b>ขึ้นว่า <code>Slip verification failed</code></b></td>
+                <td data-en="The bank check did not go through, usually an expired EasySlip key or exhausted quota. You can still decide by hand, but fix the root cause soon.">ตรวจกับธนาคารไม่สำเร็จ มักเกิดจากคีย์ EasySlip หมดอายุหรือโควตาหมด — ระบบยังให้กดตัดสินเองได้ แต่ควรรีบแก้ที่ต้นทาง</td>
+              </tr>
+              <tr>
+                <td data-en="<b>Pressed a button, told you have no permission</b>"><b>กดปุ่มแล้วขึ้นว่าไม่มีสิทธิ์</b></td>
+                <td data-en="Not on the approver list yet. Use <code>/myid</code> and give the number to any approver to add you with <code>/approver_add</code>.">ยังไม่อยู่ในรายชื่อผู้อนุมัติ — ใช้ <code>/myid</code> เอาเลขไปให้ผู้อนุมัติคนใดคนหนึ่งเพิ่มให้ด้วย <code>/approver_add</code></td>
+              </tr>
+              <tr>
+                <td data-en="<b>It says <code>Could not reach Google Drive</code></b>"><b>ขึ้นว่า <code>Could not reach Google Drive</code></b></td>
+                <td data-en="Google did not answer, which is not the same as the file being missing — do not create a second file. The system already retried three times, so just press Receive again in a moment.">Google ไม่ตอบ ซึ่งคนละเรื่องกับไฟล์หาย — <b>อย่าสร้างไฟล์ใหม่ซ้ำ</b> ระบบลองซ้ำให้ 3 ครั้งแล้ว รอสักครู่แล้วกด Receive อีกทีพอ</td>
+              </tr>
+              <tr>
+                <td data-en="<b>Cannot write to the sheet</b>"><b>บันทึกลงชีทไม่ได้</b></td>
+                <td data-en="Usually that month's file has not been created, or it is in the wrong folder. If it is in the right place, check that the root <code>Deposit check</code> folder is still shared with the system. Check with <code>/health</code>, then press Receive again once fixed.">มักเกิดจากไฟล์เดือนนั้นยังไม่ถูกสร้าง หรือวางผิดโฟลเดอร์ ถ้าสร้างถูกที่แล้วยังไม่ได้ ให้ตรวจว่าโฟลเดอร์หลัก <code>Deposit check</code> ยังแชร์ให้ระบบอยู่ — ตรวจด้วย <code>/health</code> แล้วกด Receive ใหม่ได้เลยหลังแก้เสร็จ</td>
+              </tr>
+              <tr>
+                <td data-en="<b>The amount was not found in the message</b>"><b>อ่านยอดจากข้อความไม่เจอ</b></td>
+                <td data-en="The message had no amount label. Write <code>Amount: 500</code> clearly — the system deliberately does not guess numbers.">ข้อความไม่มีป้ายบอกยอด — เขียน <code>Amount: 500</code> ให้ชัดเจน ระบบจงใจไม่เดาตัวเลขเอง</td>
+              </tr>
+              <tr>
+                <td data-en="<b>A slip was rejected by mistake</b>"><b>สลิปถูกปฏิเสธทั้งที่ไม่ควร</b></td>
+                <td data-en="Reply to the slip photo and send <code>/recheck</code> to bring the buttons back and decide it again. If the message format was the problem, tell the developer which line could not be read.">reply ที่รูปสลิปแล้วพิมพ์ <code>/recheck</code> เพื่อเอาปุ่มกลับมาตัดสินใหม่ ถ้าสาเหตุมาจากรูปแบบข้อความ ให้แจ้งผู้พัฒนาว่าบรรทัดไหนที่ระบบอ่านไม่ออก</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="accounts">
+        <h3 data-en="Supported receiving accounts">บัญชีปลายทางที่รองรับ</h3>
+        <p class="prose-narrow" data-en="Money arriving in an account outside this list is rejected automatically.">
+          ถ้าเงินเข้าบัญชีนอกรายการนี้ ระบบจะปฏิเสธอัตโนมัติ
+        </p>
+
+        <h4 data-en="How the system recognises our accounts">ระบบรู้ได้ยังไงว่าเป็นบัญชีเรา</h4>
+        <p class="prose-narrow" data-en="Banks never show the full account number on a slip — some digits are hidden behind <code>x</code>, and <b>each bank hides a different position</b>. Some reveal the last 4 digits, others the 4 before the final digit.">
+          ธนาคารไม่เปิดเผยเลขบัญชีเต็มบนสลิป จะปิดบางหลักไว้ด้วย <code>x</code>
+          และ <b>แต่ละธนาคารปิดคนละตำแหน่งกัน</b> — บางเจ้าเปิด 4 ตัวท้าย
+          บางเจ้าเปิด 4 ตัวก่อนตัวสุดท้าย
+        </p>
+        <p class="prose-narrow" data-en="So the system keeps the full account number and lays the revealed digits <b>against it position by position</b>, comparing only the ones it can see. This works for every bank with no per-bank setup.">
+          ระบบจึงเก็บเลขบัญชีเต็มไว้ แล้วนำเลขที่เปิดเผยมา
+          <b>ทาบกันทีละหลัก</b> เทียบเฉพาะตำแหน่งที่เห็น
+          วิธีนี้ใช้ได้กับทุกธนาคารโดยไม่ต้องตั้งค่าแยก
+        </p>
+
+        <div class="chat">
+          <div class="chat-head" data-en="Matching example — TTB-Yo">ตัวอย่างการเทียบ — TTB-Yo</div>
+<pre><span data-en="Slip says   x  x  x  x  x  8  5  1  4  x">สลิปบอก   x  x  x  x  x  8  5  1  4  x</span>
+<span data-en="Our account 9  2  4  2  1  8  5  1  4  9">บัญชีเรา  9  2  4  2  1  8  5  1  4  9</span>
+<span data-en="                        ✓  ✓  ✓  ✓     every visible digit matches">                        ✓  ✓  ✓  ✓     ตรงทุกหลักที่เห็น</span></pre>
+        </div>
+
+        <p class="prose-narrow note" data-en="If a slip reveals so little that several accounts would fit, the system does not guess — it shows buttons for a person to pick the account.">
+          ถ้าสลิปเปิดเผยน้อยจนเข้าได้หลายบัญชี ระบบจะไม่เดา
+          แต่จะขึ้นปุ่มให้คนเลือกบัญชีเอง
+        </p>
+
+        <div class="table-scroll">
+          <table>
+            <caption data-en="19 accounts">19 บัญชี</caption>
+            <thead>
+              <tr>
+                <th style="width:1%" data-en="No.">ลำดับ</th>
+                <th data-en="Account number">เลขบัญชี</th>
+                <th data-en="Name in sheet">ชื่อในชีท</th>
+                <th data-en="Bank">ธนาคาร</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="num">1</td><td><span class="acct">284-252-511-1</span></td><td><code>SCB-CP</code></td><td data-en="SCB">ไทยพาณิชย์</td></tr>
+              <tr><td class="num">2</td><td><span class="acct">778-157-9298</span></td><td><code>BAY-CKB</code></td><td data-en="Krungsri">กรุงศรีอยุธยา</td></tr>
+              <tr><td class="num">3</td><td><span class="acct">227-292-2872</span></td><td><code>KB-CKB</code></td><td data-en="Kasikorn">กสิกรไทย</td></tr>
+              <tr><td class="num">4</td><td><span class="acct">234-849-7726</span></td><td><code>KB-CKB97726</code></td><td data-en="Kasikorn">กสิกรไทย</td></tr>
+              <tr><td class="num">5</td><td><span class="acct">208-623-9349</span></td><td><code>KKP-Jak</code></td><td data-en="Kiatnakin Phatra">เกียรตินาคินภัทร</td></tr>
+              <tr><td class="num">6</td><td><span class="acct">020-481-91980-9</span></td><td><code>GSB-Jak</code></td><td data-en="GSB">ออมสิน</td></tr>
+              <tr><td class="num">7</td><td><span class="acct">158-418-130-7</span></td><td><code>BBL-Ploy</code></td><td data-en="Bangkok Bank">กรุงเทพ</td></tr>
+              <tr><td class="num">8</td><td><span class="acct">020-470-2987-77</span></td><td><code>GSB-Ativit</code></td><td data-en="GSB">ออมสิน</td></tr>
+              <tr><td class="num">9</td><td><span class="acct">205-260-2984</span></td><td><code>KKP-LS</code></td><td data-en="Kiatnakin Phatra">เกียรตินาคินภัทร</td></tr>
+              <tr><td class="num">10</td><td><span class="acct">924-758-0914</span></td><td><code>TTB-Nat</code></td><td data-en="TTB">ทีทีบี</td></tr>
+              <tr><td class="num">11</td><td><span class="acct">020-487-546-523</span></td><td><code>GSB-Teera</code></td><td data-en="GSB">ออมสิน</td></tr>
+              <tr><td class="num">12</td><td><span class="acct">220-815-0009</span></td><td><code>KB-BS</code></td><td data-en="Kasikorn">กสิกรไทย</td></tr>
+              <tr><td class="num">13</td><td><span class="acct">020-434-9388-72</span></td><td><code>GSB-Yo</code></td><td data-en="GSB">ออมสิน</td></tr>
+              <tr><td class="num">14</td><td><span class="acct">924-218-5149</span></td><td><code>TTB-Yo</code></td><td data-en="TTB">ทีทีบี</td></tr>
+              <tr><td class="num">15</td><td><span class="acct">156-436-9057</span></td><td><code>SCB-Yo</code></td><td data-en="SCB">ไทยพาณิชย์</td></tr>
+              <tr><td class="num">16</td><td><span class="acct">919-256-0010</span></td><td><code>TTB-Jak</code></td><td data-en="TTB">ทีทีบี</td></tr>
+              <tr><td class="num">17</td><td><span class="acct">284-252-0234</span></td><td><code>SCB-MT20234</code></td><td data-en="SCB">ไทยพาณิชย์</td></tr>
+              <tr><td class="num">18</td><td><span class="acct">227-293-7446</span></td><td><code>KB-CP37446</code></td><td data-en="Kasikorn">กสิกรไทย</td></tr>
+              <tr><td class="num">19</td><td><span class="acct">234-850-5761</span></td><td><code>KB-CP05761</code></td><td data-en="Kasikorn">กสิกรไทย</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="prose-narrow note" data-en="Accounts are added or changed in the system's configuration file, followed by one restart. This same list drives both the automatic matching and the account-picker buttons.">
+          เพิ่มหรือแก้บัญชีได้ที่ไฟล์ตั้งค่าของระบบ แล้วรีสตาร์ทหนึ่งครั้ง
+          รายการนี้ถูกใช้ทั้งตอนตรวจอัตโนมัติและตอนขึ้นปุ่มให้เลือกบัญชี
+        </p>
+      </section>
+
+      <footer class="doc-foot">
+        <p style="margin:0" data-en="Auto Slip · guide to the automated deposit-slip checking system · every reply the bot sends is in English by design">
+          Auto Slip · คู่มือระบบตรวจสลิปเงินเข้าอัตโนมัติ ·
+          ข้อความที่บอทตอบกลับทั้งหมดเป็นภาษาอังกฤษตามที่ออกแบบไว้
+        </p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var root = document.documentElement;
+  var STORE_THEME = "autoslip-theme";
+  var STORE_LANG = "autoslip-lang";
+
+  function remember(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* โหมดส่วนตัวปิด storage ไว้ */ }
+  }
+  function recall(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  /* ---------- ธีม ---------- */
+  var themeBtn = document.getElementById("theme-toggle");
+
+  function activeTheme() {
+    if (root.dataset.theme) return root.dataset.theme;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  var savedTheme = recall(STORE_THEME);
+  if (savedTheme === "dark" || savedTheme === "light") root.dataset.theme = savedTheme;
+
+  themeBtn.addEventListener("click", function () {
+    var next = activeTheme() === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    remember(STORE_THEME, next);
+  });
+
+  /* ---------- ภาษา ---------- */
+  var thBtn = document.getElementById("lang-th");
+  var enBtn = document.getElementById("lang-en");
+  var nodes = document.querySelectorAll("[data-en]");
+
+  /* เก็บต้นฉบับภาษาไทยไว้ตั้งแต่ตอนโหลด จะได้สลับกลับมาได้ */
+  var thai = [];
+  for (var i = 0; i < nodes.length; i++) thai.push(nodes[i].innerHTML);
+
+  var TITLES = {
+    th: "Auto Slip — คู่มือระบบตรวจสลิปอัตโนมัติ",
+    en: "Auto Slip — automated deposit slip checking"
+  };
+
+  function setLang(lang) {
+    var english = lang === "en";
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].innerHTML = english ? nodes[i].getAttribute("data-en") : thai[i];
+    }
+    root.lang = english ? "en" : "th";
+    document.title = english ? TITLES.en : TITLES.th;
+
+    /* aria-label ไม่ใช่ innerHTML จึงต้องตั้งแยก ไม่งั้น screen reader ค้างภาษาเดิม */
+    var toc = document.querySelector(".toc");
+    if (toc) toc.setAttribute("aria-label", english ? "Contents" : "สารบัญ");
+
+    thBtn.setAttribute("aria-pressed", english ? "false" : "true");
+    enBtn.setAttribute("aria-pressed", english ? "true" : "false");
+    remember(STORE_LANG, lang);
+  }
+
+  thBtn.addEventListener("click", function () { setLang("th"); });
+  enBtn.addEventListener("click", function () { setLang("en"); });
+
+  if (recall(STORE_LANG) === "en") setLang("en");
+})();
+</script>
+
+</body>
+</html>

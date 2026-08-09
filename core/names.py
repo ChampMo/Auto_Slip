@@ -33,6 +33,22 @@ def strip_name_title(value: str) -> str:
     return cleaned
 
 
+# คนมักเขียนชื่อคนเดียวกันหลายแบบคั่นไว้ เช่น "ธีระชัย คำสี / THEERACHAI KHAMSEE"
+# ถ้ามองเป็นชื่อเดียว คำสุดท้าย (KHAMSEE) จะถูกใช้เป็นนามสกุล แล้วไปเทียบกับสลิปไทยไม่ตรง
+NAME_VARIANT_SEPARATOR = re.compile(r"\s*[/|]\s*")
+
+
+def split_name_variants(value: str) -> list[str]:
+    """แยกชื่อที่เขียนหลายแบบออกจากกัน คืนอย่างน้อย 1 รายการเสมอ
+
+    'ธีระชัย คำสี / THEERACHAI KHAMSEE' -> ['ธีระชัย คำสี', 'THEERACHAI KHAMSEE']
+    'ดุลยฤทธิ์ ส'                        -> ['ดุลยฤทธิ์ ส']
+    """
+    variants = [part.strip() for part in NAME_VARIANT_SEPARATOR.split(value or "")]
+    variants = [variant for variant in variants if variant]
+    return variants or [""]
+
+
 def get_first_name(value: str) -> str:
     """ดึงเฉพาะชื่อจริง เช่น 'นาย ดุลยฤทธิ์ ส' -> 'ดุลยฤทธิ์'"""
     if (value or "").strip().lower() in UNKNOWN_NAMES:
@@ -56,6 +72,25 @@ def split_bank_name(value: str) -> tuple[str, str]:
     if len(parts) > 1:
         last_name_initial = re.sub(r"[^\wก-๙]", "", parts[-1])[:1].lower()
     return first_name, last_name_initial
+
+
+def surname_initials(value: str) -> set[str]:
+    """อักษรย่อนามสกุลที่เป็นไปได้ทั้งหมดของชื่อนี้
+
+    ธนาคารย่อนามสกุลเหลือตัวอักษรตัวเดียว ปกติจึงเทียบกับคำสุดท้ายได้ตรงๆ
+    แต่นามสกุลไทยบางสกุลมีหลายคำ เช่น 'อัฏฐระชัย ณ ร้อยเอ็ด' นามสกุลคือ 'ณ ร้อยเอ็ด'
+    สลิปจะโชว์ 'ณ' ซึ่งเป็นตัวแรกของนามสกุล ไม่ใช่ 'ร' ของคำสุดท้าย
+
+    จึงรับตัวแรกของทุกคำที่อยู่หลังชื่อจริง ครอบคลุมทั้งนามสกุลหลายคำ
+    และชื่อที่มีคำกลางคั่น ชื่อจริงยังต้องตรงเป๊ะอยู่เหมือนเดิม
+    """
+    parts = [part for part in re.split(r"\s+", strip_name_title(value)) if part]
+    initials = set()
+    for part in parts[1:]:
+        cleaned = re.sub(r"[^\wก-๙]", "", part)[:1].lower()
+        if cleaned:
+            initials.add(cleaned)
+    return initials
 
 
 def get_first_names(value: str) -> str:

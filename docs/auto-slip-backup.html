@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Slip — คู่มือสำรองและกู้คืนข้อมูล</title>
+</head>
+<body>
+<style>
+  :root {
+    --paper:#F4F5F2; --surface:#FFFFFF; --surface-2:#ECEEEA;
+    --ink:#17211F; --ink-soft:#3D4A47; --muted:#64726E;
+    --rule:#D2D7D2; --rule-soft:#E2E6E1;
+    --accent:#124E63; --accent-ink:#0C3A4A; --brass:#A8741A;
+    --good:#226B45; --good-bg:#E4EFE8;
+    --bad:#9C2F27;  --bad-bg:#F5E4E2;
+    --warn:#7E5810; --warn-bg:#F4EBD8;
+    --term-bg:#12201F; --term-ink:#D6E0DD; --term-dim:#7C8D89;
+    --term-prompt:#79B8A0; --term-ok:#8FCFAE; --term-err:#E4837A;
+    --bar-bg:rgba(244,245,242,.92);
+    --font-sans:"Leelawadee UI","Sukhumvit Set","Noto Sans Thai","Thonburi",
+                -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --font-mono:"Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,
+                "DejaVu Sans Mono","Leelawadee UI",monospace;
+    --t-xs:.75rem; --t-sm:.8125rem; --t-md:1.0625rem;
+    --t-lg:1.3125rem; --t-xl:1.75rem; --t-2xl:2.25rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#0F1618; --surface:#16201F; --surface-2:#1D2827;
+      --ink:#E4E9E7; --ink-soft:#C2CCC9; --muted:#8E9C98;
+      --rule:#2C3937; --rule-soft:#232E2D;
+      --accent:#63B4CD; --accent-ink:#8ACBE0; --brass:#D3A44E;
+      --good:#64BE8D; --good-bg:#163024;
+      --bad:#E4837A;  --bad-bg:#33201E;
+      --warn:#D3A44E; --warn-bg:#302716;
+      --term-bg:#0A1112; --term-ink:#D6E0DD;
+      --bar-bg:rgba(15,22,24,.92);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0F1618; --surface:#16201F; --surface-2:#1D2827;
+    --ink:#E4E9E7; --ink-soft:#C2CCC9; --muted:#8E9C98;
+    --rule:#2C3937; --rule-soft:#232E2D;
+    --accent:#63B4CD; --accent-ink:#8ACBE0; --brass:#D3A44E;
+    --good:#64BE8D; --good-bg:#163024;
+    --bad:#E4837A;  --bad-bg:#33201E;
+    --warn:#D3A44E; --warn-bg:#302716;
+    --term-bg:#0A1112; --term-ink:#D6E0DD;
+    --bar-bg:rgba(15,22,24,.92);
+  }
+  :root[data-theme="light"] {
+    --paper:#F4F5F2; --surface:#FFFFFF; --surface-2:#ECEEEA;
+    --ink:#17211F; --ink-soft:#3D4A47; --muted:#64726E;
+    --rule:#D2D7D2; --rule-soft:#E2E6E1;
+    --accent:#124E63; --accent-ink:#0C3A4A; --brass:#A8741A;
+    --good:#226B45; --good-bg:#E4EFE8;
+    --bad:#9C2F27;  --bad-bg:#F5E4E2;
+    --warn:#7E5810; --warn-bg:#F4EBD8;
+    --term-bg:#12201F; --term-ink:#D6E0DD;
+    --bar-bg:rgba(244,245,242,.92);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-sans); line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .topbar {
+    position:sticky; top:0; z-index:20; background:var(--bar-bg);
+    -webkit-backdrop-filter:saturate(180%) blur(8px);
+    backdrop-filter:saturate(180%) blur(8px);
+    border-bottom:1px solid var(--rule-soft);
+  }
+  .topbar-inner {
+    max-width:880px; margin:0 auto; padding:.55rem 1.5rem;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  }
+  .brand { display:inline-flex; align-items:center; gap:.55rem; min-width:0; }
+  .brand-mark { width:17px; height:17px; flex:none; color:var(--brass); }
+  .brand-name {
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.15em;
+    text-transform:uppercase; font-weight:700; color:var(--ink); white-space:nowrap;
+  }
+  .brand-sep { width:1px; height:13px; background:var(--rule); flex:none; }
+  .brand-kind {
+    font-size:var(--t-xs); color:var(--muted); letter-spacing:.04em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .icon-btn {
+    display:inline-flex; align-items:center; gap:.4rem;
+    border:1px solid var(--rule); background:var(--surface); color:var(--ink-soft);
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.1em;
+    padding:.3rem .6rem; cursor:pointer; line-height:1.6;
+  }
+  .icon-btn svg { width:13px; height:13px; flex:none; }
+  .icon-btn:hover { color:var(--accent); }
+  .icon-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .icon-moon { display:none; }
+  :root[data-theme="dark"] .icon-sun { display:none; }
+  :root[data-theme="dark"] .icon-moon { display:inline; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .icon-sun { display:none; }
+    :root:not([data-theme="light"]) .icon-moon { display:inline; }
+  }
+  @media (max-width:560px) { .brand-sep, .brand-kind { display:none; } }
+
+  .wrap { max-width:880px; margin:0 auto; padding:0 1.5rem 5rem; }
+
+  .masthead { border-bottom:2px solid var(--ink); padding:3rem 0 1.25rem; margin-bottom:2rem; }
+  .masthead h1 {
+    font-size:var(--t-2xl); line-height:1.15; letter-spacing:-.02em;
+    font-weight:700; margin:0 0 .5rem; text-wrap:balance;
+  }
+  .masthead p { margin:0; color:var(--ink-soft); max-width:62ch; }
+
+  section { scroll-margin-top:4rem; }
+  h2 {
+    font-size:var(--t-lg); font-weight:700; letter-spacing:-.01em;
+    margin:3rem 0 .5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+    text-wrap:balance;
+  }
+  h2 .n {
+    font-family:var(--font-mono); font-size:var(--t-xs); color:var(--brass);
+    letter-spacing:.14em; display:block; margin-bottom:.3rem; font-weight:400;
+  }
+  h3 { font-size:var(--t-md); font-weight:700; margin:1.75rem 0 .5rem; }
+  p { margin:0 0 1rem; max-width:70ch; }
+  .note { font-size:var(--t-sm); color:var(--muted); }
+  code {
+    font-family:var(--font-mono); font-size:.9em; background:var(--surface-2);
+    padding:.1em .35em; color:var(--accent-ink);
+  }
+  ul.tight, ol.tight { margin:0 0 1rem; padding-left:1.2rem; max-width:70ch; }
+  ul.tight li, ol.tight li { margin-bottom:.4rem; }
+
+  /* ---------- หน้าจอเทอร์มินัล ---------- */
+  .term {
+    margin:1rem 0 1.5rem; background:var(--term-bg); border:1px solid var(--rule);
+    overflow:hidden;
+  }
+  .term-head {
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.1em;
+    text-transform:uppercase; color:var(--term-dim);
+    padding:.5rem .9rem; border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .term pre {
+    margin:0; padding:.9rem; overflow-x:auto; white-space:pre;
+    font-family:var(--font-mono); font-size:var(--t-sm); line-height:1.75;
+    color:var(--term-ink);
+  }
+  .term .p  { color:var(--term-prompt); }   /* เครื่องหมาย $ */
+  .term .o  { color:var(--term-dim); }      /* ผลลัพธ์ทั่วไป */
+  .term .ok { color:var(--term-ok); }
+  .term .er { color:var(--term-err); }
+  .term .c  { color:var(--term-dim); font-style:italic; }  /* คำอธิบาย */
+
+  /* ---------- การ์ดคำสั่งลัด ---------- */
+  .quick {
+    display:grid; gap:1px; background:var(--rule);
+    border:1px solid var(--rule); margin:1.5rem 0 0;
+  }
+  @media (min-width:680px) { .quick { grid-template-columns:repeat(3,1fr); } }
+  .quick > div { background:var(--surface); padding:.9rem 1rem 1rem; }
+  .quick dt {
+    font-family:var(--font-mono); font-size:var(--t-xs); letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.4rem;
+  }
+  .quick dd { margin:0; }
+  .quick .cmd {
+    display:block; font-family:var(--font-mono); font-size:var(--t-sm);
+    color:var(--accent-ink); background:var(--surface-2);
+    padding:.35rem .5rem; margin-bottom:.4rem; overflow-x:auto; white-space:nowrap;
+  }
+  .quick .why { font-size:var(--t-sm); color:var(--muted); line-height:1.6; }
+
+  .table-scroll { overflow-x:auto; margin:1rem 0 1.5rem; }
+  table { border-collapse:collapse; width:100%; min-width:460px; font-size:var(--t-sm); }
+  th, td {
+    text-align:left; padding:.6rem .85rem .6rem 0;
+    border-bottom:1px solid var(--rule-soft); vertical-align:top;
+  }
+  thead th {
+    border-bottom:1.5px solid var(--ink); font-size:var(--t-xs);
+    letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    font-weight:600; white-space:nowrap;
+  }
+  tbody tr:last-child td { border-bottom:1px solid var(--rule); }
+
+  .stamp {
+    display:inline-block; font-family:var(--font-mono); font-size:10px;
+    letter-spacing:.12em; text-transform:uppercase; padding:.18rem .45rem;
+    border:1px solid currentColor; line-height:1.4; font-weight:600;
+  }
+  .stamp[data-tone="good"] { color:var(--good); background:var(--good-bg); }
+  .stamp[data-tone="bad"]  { color:var(--bad);  background:var(--bad-bg); }
+  .stamp[data-tone="warn"] { color:var(--warn); background:var(--warn-bg); }
+
+  .callout {
+    border:1px solid var(--rule); border-top:3px solid var(--warn);
+    background:var(--surface); padding:1.1rem 1.2rem 1.2rem; margin:1.5rem 0;
+  }
+  .callout[data-tone="bad"] { border-top-color:var(--bad); }
+  .callout[data-tone="good"] { border-top-color:var(--good); }
+  .callout h3 { margin:.45rem 0 .5rem; }
+  .callout p:last-child { margin-bottom:0; }
+
+  .steps { list-style:none; margin:1.5rem 0; padding:0; counter-reset:step; }
+  .steps > li {
+    position:relative; counter-increment:step;
+    padding:0 0 1.75rem 2.6rem; border-left:2px solid var(--rule); margin-left:.65rem;
+  }
+  .steps > li:last-child { border-left-color:transparent; padding-bottom:0; }
+  .steps > li::before {
+    content:counter(step); position:absolute; left:-.85rem; top:0;
+    width:1.65rem; height:1.65rem; border-radius:50%;
+    background:var(--accent); color:var(--paper);
+    font-family:var(--font-mono); font-size:var(--t-xs); font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .steps h3 { margin:0 0 .35rem; }
+  .steps p { margin:0 0 .5rem; }
+
+  footer { margin-top:4rem; padding-top:1.25rem; border-top:2px solid var(--ink);
+           font-size:var(--t-sm); color:var(--muted); }
+
+  @media print {
+    body { background:#fff; }
+    .topbar { display:none; }
+    .term { border-color:#999; }
+    h2 { break-after:avoid; }
+    .callout, .steps > li { break-inside:avoid; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" aria-hidden="true">
+        <rect x="2" y="2" width="7" height="7"/>
+        <rect x="15" y="2" width="7" height="7"/>
+        <rect x="2" y="15" width="7" height="7"/>
+        <rect x="15" y="15" width="3" height="3" fill="currentColor" stroke="none"/>
+        <rect x="19" y="19" width="3" height="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="brand-name">Auto Slip</span>
+      <span class="brand-sep" aria-hidden="true"></span>
+      <span class="brand-kind">สำรองและกู้คืนข้อมูล</span>
+    </span>
+    <button type="button" class="icon-btn" id="theme-toggle" aria-label="สลับธีม">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+      <span>ธีม</span>
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>คู่มือสำรองและกู้คืนข้อมูล</h1>
+    <p>
+      สำหรับผู้ดูแลเซิร์ฟเวอร์ของระบบ Auto Slip —
+      วิธีติดตั้งการสำรองอัตโนมัติ วิธีตรวจว่าไฟล์สำรองยังใช้ได้จริง
+      และวิธีกู้คืนเมื่อข้อมูลเสียหาย
+    </p>
+
+    <dl class="quick">
+      <div>
+        <dt>สำรองทันที</dt>
+        <dd>
+          <span class="cmd">./scripts/backup.sh</span>
+          <span class="why">ปกติ cron ทำให้เองทุกวัน สั่งเองเมื่อจะแก้อะไรใหญ่ๆ</span>
+        </dd>
+      </div>
+      <div>
+        <dt>ตรวจไฟล์สำรอง</dt>
+        <dd>
+          <span class="cmd">./scripts/restore.sh --check ไฟล์</span>
+          <span class="why">ปลอดภัย ไม่แตะข้อมูลจริง ควรทำเดือนละครั้ง</span>
+        </dd>
+      </div>
+      <div>
+        <dt>กู้คืนจริง</dt>
+        <dd>
+          <span class="cmd">./scripts/restore.sh ไฟล์</span>
+          <span class="why">เขียนทับข้อมูลปัจจุบันทั้งหมด ต้องพิมพ์ยืนยัน</span>
+        </dd>
+      </div>
+    </dl>
+  </header>
+
+  <section>
+    <h2><span class="n">หัวข้อ 1</span>ทำไมต้องสำรอง</h2>
+    <p>
+      ข้อมูลทั้งหมดอยู่ในฐานข้อมูลบนเซิร์ฟเวอร์เครื่องเดียว
+      ถ้าเครื่องพัง หรือมีคนเผลอลบ ข้อมูลสามอย่างนี้จะหายไปพร้อมกัน
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>สิ่งที่หาย</th><th>ผลที่ตามมา</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>ประวัติสลิปทั้งหมด</b></td>
+            <td>ด่านกันสลิปซ้ำหายไปด้วย — สลิปเก่าทุกใบส่งเข้ามาซ้ำได้ทันทีโดยระบบไม่รู้ตัว</td>
+          </tr>
+          <tr>
+            <td><b>รายชื่อผู้อนุมัติ</b></td>
+            <td>เหลือเฉพาะเจ้าของที่ตั้งไว้ในไฟล์ตั้งค่า คนอื่นต้องเพิ่มใหม่ทั้งหมด</td>
+          </tr>
+          <tr>
+            <td><b>บันทึกว่าใครกดอะไร</b></td>
+            <td>ตรวจย้อนหลังไม่ได้อีกเลย</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      การสำรองไม่ได้ป้องกันเครื่องพัง แต่ทำให้กู้กลับมาได้
+      — ส่วนที่แพงคือข้อมูล ไม่ใช่เครื่อง
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 2</span>ติดตั้งครั้งแรก</h2>
+    <p>ทำครั้งเดียว หลังจากนั้นระบบจะสำรองให้เองทุกวัน</p>
+
+    <ol class="steps">
+      <li>
+        <h3>อัปโหลดสคริปต์ขึ้นเซิร์ฟเวอร์</h3>
+        <p>
+          อัปโฟลเดอร์ <code>scripts/</code> ทั้งโฟลเดอร์ผ่าน FileZilla
+          ไปวางที่ <code>/root/Auto_Slip/scripts/</code>
+        </p>
+        <div class="callout" data-tone="bad" style="margin:.75rem 0">
+          <span class="stamp" data-tone="bad">ห้ามลืม</span>
+          <h3>ตั้งค่าโหมดถ่ายโอนเป็น Binary ก่อนอัป</h3>
+          <p style="margin-bottom:0">
+            ใน FileZilla ไปที่ <b>Transfer → Transfer type → Binary</b>
+            ถ้าใช้โหมด ASCII หรือ Auto ไฟล์อาจถูกแปลงท้ายบรรทัดเป็นแบบ Windows
+            แล้วสคริปต์จะรันไม่ได้ ขึ้น error ว่า
+            <code>bad interpreter: /usr/bin/env bash^M</code>
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <h3>เปิดสิทธิ์ให้รันได้</h3>
+        <p>
+          ไฟล์ที่อัปผ่าน FileZilla จะยังรันไม่ได้ ต้องสั่งเปิดสิทธิ์เองหนึ่งครั้ง
+        </p>
+        <div class="term">
+          <div class="term-head">ทำครั้งเดียวหลังอัปครั้งแรก</div>
+<pre><span class="p">$</span> ssh root@139.59.224.209
+<span class="p">$</span> cd ~/Auto_Slip
+<span class="p">$</span> chmod +x scripts/*.sh
+
+<span class="c"># เช็คว่าท้ายบรรทัดไม่ใช่แบบ Windows (ไม่ควรมี ^M ขึ้น)</span>
+<span class="p">$</span> head -1 scripts/backup.sh | cat -A
+<span class="o">#!/usr/bin/env bash$</span>            <span class="c"># ถูกต้อง — ลงท้ายด้วย $ เฉยๆ</span></pre>
+        </div>
+        <p class="note">
+          ถ้าเห็น <code>^M$</code> แทน ให้สั่ง
+          <code>sed -i 's/\r$//' scripts/*.sh</code> แก้ทีเดียวจบ
+        </p>
+      </li>
+
+      <li>
+        <h3>ลองสำรองด้วยมือหนึ่งครั้ง</h3>
+        <p>อย่าเพิ่งตั้งเวลาอัตโนมัติ จนกว่าจะเห็นว่าคำสั่งนี้ทำงานได้จริง</p>
+        <div class="term">
+          <div class="term-head">ผลลัพธ์ที่ควรได้</div>
+<pre><span class="p">$</span> ./scripts/backup.sh
+<span class="o">2026-08-06 15:30:01  กำลังสำรอง autoslip_db จากคอนเทนเนอร์ a1b2c3d4e5f6</span>
+<span class="ok">2026-08-06 15:30:03  สำเร็จ: autoslip-20260806-153001.sql.gz (24K, 1847 รายการ)</span>
+<span class="o">2026-08-06 15:30:03  มีไฟล์สำรองทั้งหมด 1 ไฟล์ใน /var/backups/auto_slip</span></pre>
+        </div>
+        <p class="note">
+          ถ้าขึ้นข้อความที่ขึ้นต้นด้วย <code>ล้มเหลว:</code> ให้ดูหัวข้อ 6 ก่อนไปต่อ
+        </p>
+      </li>
+
+      <li>
+        <h3>พิสูจน์ว่าไฟล์ที่ได้กู้คืนได้จริง</h3>
+        <p>
+          ขั้นตอนนี้สำคัญที่สุดและคนมักข้าม —
+          ไฟล์สำรองที่กู้คืนไม่ได้ ไม่นับว่าเป็นไฟล์สำรอง
+        </p>
+        <div class="term">
+          <div class="term-head">ไม่แตะฐานข้อมูลจริง</div>
+<pre><span class="p">$</span> ./scripts/restore.sh --check /var/backups/auto_slip/autoslip-20260806-153001.sql.gz
+<span class="o">2026-08-06 15:31:10  ตรวจไฟล์ autoslip-20260806-153001.sql.gz โดยกู้ลงฐานข้อมูลชั่วคราว</span>
+<span class="o">2026-08-06 15:31:14  กู้คืนสำเร็จ ข้อมูลที่อยู่ในไฟล์:</span>
+
+<span class="o">  ตาราง         จำนวนแถว</span>
+<span class="o">  ──────────────  ────────</span>
+<span class="o">  transactions   1847</span>
+<span class="o">  used_qrs       1902</span>
+<span class="o">  approvers      4</span>
+<span class="o">  audit_logs     7215</span>
+
+<span class="ok">2026-08-06 15:31:15  ไฟล์สำรองนี้ใช้งานได้ (ฐานข้อมูลจริงไม่ถูกแตะต้อง)</span></pre>
+        </div>
+      </li>
+
+      <li>
+        <h3>ตั้งให้ทำเองทุกวัน</h3>
+        <div class="term">
+          <div class="term-head">ตั้งเวลาด้วย cron</div>
+<pre><span class="p">$</span> sudo crontab -e
+
+<span class="c"># เพิ่มบรรทัดนี้ — สำรองทุกวันตี 3 พร้อมเก็บ log</span>
+0 3 * * * /root/Auto_Slip/scripts/backup.sh &gt;&gt; /var/log/autoslip-backup.log 2&gt;&amp;1</pre>
+        </div>
+        <p class="note">
+          เลือกตี 3 เพราะเป็นช่วงที่ไม่มีสลิปเข้า และห่างจากงานสร้างแท็บชีทตอน 22:59
+          (cron ใช้เวลาของเครื่อง ไม่เกี่ยวกับปฏิทินธุรกิจของระบบ)
+        </p>
+      </li>
+    </ol>
+
+    <div class="callout" data-tone="good">
+      <span class="stamp" data-tone="good">เสร็จแล้ว</span>
+      <h3>หลังจากนี้ไม่ต้องทำอะไรทุกวัน</h3>
+      <p style="margin-bottom:0">
+        ระบบจะสำรองเองทุกคืน เก็บย้อนหลัง 14 วัน และลบไฟล์เก่าให้เอง
+        เหลือแค่งานตรวจเดือนละครั้งในหัวข้อ 3
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 3</span>งานประจำที่ต้องทำ</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th style="width:1%">ความถี่</th><th>ทำอะไร</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>ทุกวัน</b></td>
+            <td>ไม่ต้องทำอะไร cron จัดการให้</td>
+          </tr>
+          <tr>
+            <td><b>เดือนละครั้ง</b></td>
+            <td>
+              รัน <code>restore.sh --check</code> กับไฟล์ล่าสุด
+              เพื่อยืนยันว่ายังกู้คืนได้จริง
+            </td>
+          </tr>
+          <tr>
+            <td><b>นานๆ ครั้ง</b></td>
+            <td>
+              เปิดดู <code>/var/log/autoslip-backup.log</code>
+              ว่ามีวันไหนล้มเหลวโดยไม่มีใครสังเกตหรือเปล่า
+            </td>
+          </tr>
+          <tr>
+            <td><b>ก่อนแก้อะไรใหญ่</b></td>
+            <td>
+              สั่ง <code>./scripts/backup.sh</code> ด้วยมือก่อน
+              เช่น ก่อนอัปเดตโค้ด หรือก่อนแก้ข้อมูลในฐานข้อมูลโดยตรง
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>ดูว่ามีไฟล์สำรองอะไรอยู่บ้าง</h3>
+    <div class="term">
+      <div class="term-head">เรียงจากใหม่ไปเก่า</div>
+<pre><span class="p">$</span> ls -lht /var/backups/auto_slip
+<span class="o">-rw------- 1 root root  24K Aug  6 03:00 autoslip-20260806-030001.sql.gz</span>
+<span class="o">-rw------- 1 root root  24K Aug  5 03:00 autoslip-20260805-030001.sql.gz</span>
+<span class="o">-rw------- 1 root root  23K Aug  4 03:00 autoslip-20260804-030001.sql.gz</span></pre>
+    </div>
+    <p class="note">
+      ถ้าไฟล์ล่าสุดเก่ากว่าเมื่อวาน แปลว่าการสำรองอัตโนมัติหยุดทำงาน ให้ดูหัวข้อ 6
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 4</span>ตรวจว่าไฟล์สำรองใช้ได้</h2>
+    <p>
+      คำสั่ง <code>--check</code> จะสร้างฐานข้อมูลชั่วคราวขึ้นมา กู้ไฟล์ลงไป
+      นับจำนวนแถวให้ดู แล้วลบฐานข้อมูลชั่วคราวทิ้ง
+      <b>ฐานข้อมูลจริงไม่ถูกแตะต้องเลย</b> จึงรันได้ตลอดเวลาโดยไม่ต้องหยุดบอท
+    </p>
+    <div class="term">
+      <div class="term-head">รันได้ตลอด ไม่ต้องหยุดบอท</div>
+<pre><span class="p">$</span> cd ~/Auto_Slip
+<span class="p">$</span> ./scripts/restore.sh --check /var/backups/auto_slip/autoslip-20260806-030001.sql.gz</pre>
+    </div>
+
+    <h3>อ่านผลยังไง</h3>
+    <ul class="tight">
+      <li>
+        ขึ้น <b>“ไฟล์สำรองนี้ใช้งานได้”</b> — เรียบร้อย ไม่ต้องทำอะไรต่อ
+      </li>
+      <li>
+        ขึ้น <b>“กู้คืนไม่สำเร็จ — ไฟล์สำรองนี้ใช้ไม่ได้”</b> —
+        ลองไฟล์ของวันก่อนหน้า ถ้าเสียหลายวันติดกันแปลว่าการสำรองมีปัญหามาสักพักแล้ว
+        ให้รีบตรวจ log และแจ้งผู้พัฒนา
+      </li>
+      <li>
+        <b>จำนวนแถวน้อยกว่าที่ควรมาก</b> — เทียบกับ <code>/today</code> ในกลุ่ม Telegram
+        ว่าจำนวนสลิปสมเหตุสมผลไหม
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 5</span>กู้คืนข้อมูลจริง</h2>
+
+    <div class="callout" data-tone="bad">
+      <span class="stamp" data-tone="bad">อ่านก่อนทำ</span>
+      <h3>คำสั่งนี้เขียนทับข้อมูลปัจจุบันทั้งหมด</h3>
+      <p style="margin-bottom:0">
+        สลิปที่เข้ามาหลังจากไฟล์สำรองถูกสร้าง <b>จะหายไป</b>
+        ทำเฉพาะตอนข้อมูลเสียหายจริงเท่านั้น
+        ถ้าแค่อยากดูข้อมูลเก่า ให้ใช้ <code>--check</code> ในหัวข้อ 4 แทน
+      </p>
+    </div>
+
+    <ol class="steps">
+      <li>
+        <h3>หยุดบอทก่อน</h3>
+        <p>กันไม่ให้มีสลิปใหม่เข้ามาระหว่างกู้คืน ซึ่งจะทำให้ข้อมูลปนกัน</p>
+        <div class="term">
+          <div class="term-head">บอทหยุด ฐานข้อมูลยังทำงานอยู่</div>
+<pre><span class="p">$</span> cd ~/Auto_Slip
+<span class="p">$</span> docker-compose stop bot</pre>
+        </div>
+      </li>
+
+      <li>
+        <h3>เลือกไฟล์และสั่งกู้คืน</h3>
+        <div class="term">
+          <div class="term-head">ต้องพิมพ์ชื่อฐานข้อมูลยืนยัน</div>
+<pre><span class="p">$</span> ./scripts/restore.sh /var/backups/auto_slip/autoslip-20260806-030001.sql.gz
+
+<span class="er">  ⚠  กำลังจะเขียนทับฐานข้อมูล "autoslip_db" ทั้งหมดด้วยไฟล์</span>
+<span class="er">     autoslip-20260806-030001.sql.gz</span>
+
+<span class="o">     ข้อมูลปัจจุบันทั้งหมดจะหายไป รวมถึงสลิปที่บันทึกหลังไฟล์นี้ถูกสร้าง</span>
+<span class="o">     ควรหยุดบอทก่อน:  docker compose stop bot</span>
+
+<span class="p">  พิมพ์ชื่อฐานข้อมูลเพื่อยืนยัน (autoslip_db):</span> autoslip_db</pre>
+        </div>
+        <p class="note">
+          พิมพ์ไม่ตรงจะยกเลิกทันที ไม่มีอะไรเปลี่ยนแปลง
+        </p>
+      </li>
+
+      <li>
+        <h3>ดูจำนวนแถวก่อนและหลัง</h3>
+        <p>
+          สคริปต์จะแสดงจำนวนแถวทั้งก่อนและหลังกู้คืน
+          ใช้ยืนยันว่าข้อมูลกลับมาจริงตามที่คาด
+        </p>
+      </li>
+
+      <li>
+        <h3>เปิดบอทกลับ</h3>
+        <div class="term">
+          <div class="term-head">อย่าลืมขั้นตอนนี้</div>
+<pre><span class="p">$</span> docker-compose start bot
+<span class="p">$</span> docker-compose logs -f bot   <span class="c"># ดูว่าบอทเริ่มได้ปกติ กด Ctrl+C เพื่อออก</span></pre>
+        </div>
+        <p>
+          จากนั้นพิมพ์ <code>/health</code> ในกลุ่ม Telegram เพื่อยืนยันว่าระบบกลับมาทำงานครบ
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 6</span>เมื่อมีปัญหา</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>ข้อความที่ขึ้น</th><th>สาเหตุและวิธีแก้</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>หาคอนเทนเนอร์ฐานข้อมูลไม่เจอ</code></td>
+            <td>
+              ฐานข้อมูลไม่ได้ทำงานอยู่ ตรวจด้วย <code>docker-compose ps</code>
+              แล้วเปิดด้วย <code>docker-compose up -d db</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Permission denied</code></td>
+            <td>
+              ไฟล์ยังไม่มีสิทธิ์รัน — เกิดทุกครั้งที่อัปไฟล์ใหม่ผ่าน FileZilla
+              สั่ง <code>chmod +x scripts/*.sh</code>
+              หรือรันด้วย <code>bash scripts/backup.sh</code> ไปก่อน
+            </td>
+          </tr>
+          <tr>
+            <td><code>bad interpreter: /usr/bin/env bash^M</code><br>
+                หรือ <code>$'\r': command not found</code></td>
+            <td>
+              ไฟล์ถูกอัปมาแบบ Windows แก้ด้วย
+              <code>sed -i 's/\r$//' scripts/*.sh</code>
+              แล้วตั้งโหมด Binary ใน FileZilla ก่อนอัปครั้งถัดไป
+            </td>
+          </tr>
+          <tr>
+            <td><code>ไฟล์เล็กผิดปกติ</code> หรือ <code>ไม่พบตาราง ... ในไฟล์สำรอง</code></td>
+            <td>
+              ดัมป์ไม่ครบ มักเกิดจากพื้นที่ดิสก์เต็มหรือฐานข้อมูลถูกปิดกลางคัน
+              ตรวจพื้นที่ด้วย <code>df -h</code> —
+              ไฟล์ที่ไม่ผ่านจะถูกลบทิ้ง ไม่ทับของเดิม
+            </td>
+          </tr>
+          <tr>
+            <td><code>pg_dump ไม่สำเร็จ</code></td>
+            <td>
+              ชื่อผู้ใช้หรือชื่อฐานข้อมูลไม่ตรง ตรวจ <code>POSTGRES_USER</code>
+              และ <code>POSTGRES_DB</code> ในไฟล์ <code>.env</code>
+            </td>
+          </tr>
+          <tr>
+            <td><b>ไม่มีไฟล์ใหม่มาหลายวัน</b></td>
+            <td>
+              cron อาจไม่ทำงาน ตรวจด้วย <code>sudo crontab -l</code>
+              ว่ามีบรรทัดอยู่จริง และดู <code>/var/log/autoslip-backup.log</code>
+            </td>
+          </tr>
+          <tr>
+            <td><b>พื้นที่ดิสก์ใกล้เต็ม</b></td>
+            <td>
+              ลดจำนวนวันที่เก็บ เช่น
+              <code>KEEP_DAYS=7 ./scripts/backup.sh</code>
+              หรือแก้ค่าเริ่มต้นในสคริปต์
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">หัวข้อ 7</span>ข้อจำกัดที่ควรรู้</h2>
+
+    <div class="callout">
+      <span class="stamp" data-tone="warn">จุดอ่อนที่เหลืออยู่</span>
+      <h3>ไฟล์สำรองอยู่บนเครื่องเดียวกับฐานข้อมูล</h3>
+      <p>
+        ระบบนี้กันได้กรณี <b>ลบข้อมูลผิด</b> หรือ <b>อยากย้อนกลับไปวันก่อน</b>
+        แต่ <b>ไม่ช่วยถ้าเซิร์ฟเวอร์พังทั้งเครื่อง</b> เพราะไฟล์สำรองจะหายไปด้วย
+      </p>
+      <p style="margin-bottom:0">
+        ถ้าต้องการกันจุดนี้ด้วย มีสองทาง — เปิด snapshot อัตโนมัติของ DigitalOcean
+        (ประมาณ $1.20 ต่อเดือน สำรองทั้งเครื่อง)
+        หรือเพิ่มการก๊อปไฟล์สำรองออกไปเก็บที่อื่นทุกวัน
+      </p>
+    </div>
+
+    <h3>สิ่งที่ไฟล์สำรองไม่ได้เก็บ</h3>
+    <ul class="tight">
+      <li><b>ไฟล์ตั้งค่า</b> <code>.env</code> และ <code>credentials.json</code> — เก็บสำเนาไว้ที่ปลอดภัยแยกต่างหาก</li>
+      <li><b>ข้อมูลใน Google Sheets</b> — อยู่บน Google อยู่แล้ว มีประวัติย้อนหลังของตัวเอง</li>
+      <li><b>รูปสลิป</b> — ระบบไม่ได้เก็บรูปไว้ ลบทิ้งทันทีหลังอ่าน QR เสร็จ</li>
+    </ul>
+
+    <h3>ความปลอดภัยของไฟล์สำรอง</h3>
+    <p>
+      ไฟล์สำรองมีข้อมูลธุรกรรมทั้งหมด จึงตั้งสิทธิ์ให้อ่านได้เฉพาะ root
+      และเก็บไว้นอกโฟลเดอร์โปรเจกต์ — <b>อย่าคัดลอกไปวางในที่ที่คนอื่นเข้าถึงได้
+      และอย่าเอาขึ้น GitHub</b>
+    </p>
+  </section>
+
+  <footer>
+    <p style="margin:0">
+      Auto Slip 1.4.2 · คู่มือสำรองและกู้คืนข้อมูล · ใช้ควบคู่กับคู่มือใช้งานระบบ
+    </p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var KEY = "autoslip-theme";
+  function recall() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function remember(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* storage ถูกปิด */ } }
+
+  var saved = recall();
+  if (saved === "dark" || saved === "light") root.dataset.theme = saved;
+
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    var current = root.dataset.theme ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = current === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    remember(next);
+  });
+})();
+</script>
+
+</body>
+</html>
