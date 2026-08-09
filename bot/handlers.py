@@ -24,6 +24,7 @@ from core.matcher import (
     NEEDS_QR_STATUS,
     PHOTO_KEY_PREFIX,
     photo_key,
+    topic_allowed,
     process_incoming_slip,
 )
 from core.names import split_bank_name, split_name_variants, surname_initials
@@ -667,6 +668,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"👉 [DEBUG] Received a message from the group with Chat ID: {chat_id}")
     msg_id = message.message_id
     caption = message.caption or ""
+
+    # กลุ่มที่ตั้งหมายเลขหัวข้อไว้ ให้ทำงานเฉพาะหัวข้อนั้น หัวข้ออื่นข้ามไปเงียบๆ
+    if not topic_allowed(chat_id, getattr(message, "message_thread_id", None)):
+        logger.info("Ignored photo from another topic | chat_id=%s | topic=%s",
+                    chat_id, getattr(message, "message_thread_id", None))
+        return
 
     # รูป QR ที่ตอบกลับข้อความทวง แทบไม่มีใครใส่ caption มาด้วย
     # จึงต้องรู้ก่อนว่าเป็นคำตอบของคำถามไหม ก่อนจะไปเจอด่านกรอง caption ข้างล่าง
@@ -1817,6 +1824,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    show_alert=True)
                 return
 
+            # จองสิทธิ์ตรวจก่อนเริ่ม กันคนกดรัวหรือหลายคนกดพร้อมกัน
+            # ทุกครั้งที่กดคือโควตา EasySlip จริง และได้ข้อความรีวิวซ้อนกันหลายอัน
+            # จนไม่รู้ว่าอันไหนคือของจริง
+            if str(txn.status) in DECIDED_STATUSES:
+                # ปุ่มเก่าบนจอคนอื่น ต้องบอกตามจริงว่าจบไปแล้วอย่างไร
+                # ไม่ใช่เหมารวมว่า "มีคนกำลังตรวจอยู่"
+                await announce_already_decided(query, txn)
+                return
+            if not claim_transaction(db, txn.batch_id, NEEDS_QR_STATUS):
+                await query.answer("Someone is already checking this one.",
+                                   show_alert=True)
+                return
             add_audit_log(db, txn.batch_id, "reverified_by_hand", actor=describe_actor(user))
             db.commit()
             waiting = {"batch_id": txn.batch_id, "chat_id": txn.chat_id,
@@ -1827,6 +1846,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
             logger.info("Re-verifying on request | batch_id=%s | by=%s",
                         waiting["batch_id"], describe_actor(user))
+            # ปล่อย connection คืน pool ก่อนงานยาว — ตรวจกับ EasySlip อาจกิน
+            # เกิน 10 วินาที (มีการลองซ้ำ) แล้วยังต่อด้วยการเขียนชีท
+            # ถ้าถือ connection ไว้ทั้งช่วงนั้น หลายคนกดพร้อมกันจะดูด pool จนหมด
+            db.close()
             await process_slip_group(
                 context.bot, waiting["chat_id"], waiting["msg_id"], waiting["caption"],
                 known, photo_count=1, photo_hashes=[waiting["photo_hash"]],
@@ -1927,6 +1950,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=None)
             logger.info("QR declared unreadable | batch_id=%s | by=%s",
                         txn.batch_id, describe_actor(user))
+            # ปล่อย connection คืน pool ก่อนงานยาว — ตรวจกับ EasySlip อาจกิน
+            # เกิน 10 วินาที (มีการลองซ้ำ) แล้วยังต่อด้วยการเขียนชีท
+            # ถ้าถือ connection ไว้ทั้งช่วงนั้น หลายคนกดพร้อมกันจะดูด pool จนหมด
+            db.close()
             await process_slip_group(
                 context.bot, waiting["chat_id"], waiting["msg_id"], waiting["caption"],
                 [], photo_count=1, photo_hashes=[waiting["photo_hash"]],

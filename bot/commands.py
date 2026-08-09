@@ -20,7 +20,7 @@ from bot.keyboards import get_approval_keyboard
 from core.captions import extract_data_from_caption
 from core.config import config
 from core.version import describe_version
-from core.matcher import GROUP_CATEGORY, REJECTED_STATUSES
+from core.matcher import GROUP_CATEGORY, REOPENABLE_STATUSES
 from database.crud import (
     add_approver,
     add_audit_log,
@@ -437,7 +437,9 @@ async def recheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        if status.lower() not in REJECTED_STATUSES:
+        # ใบที่ค้างรอ QR ต้องกู้ได้ด้วย เพราะถ้าบอทล้มกลางทางหลังจากตั้งสถานะไว้
+        # ข้อความที่ใช้ตอบ QR จะหายไปพร้อมกัน แล้วใบนั้นจะไม่มีทางไปต่อเลย
+        if status.lower() not in REOPENABLE_STATUSES:
             await message.reply_text(
                 f"This slip is not finished yet ({STATUS_ICONS.get(status.lower(), status)}). "
                 "Nothing to send back — the buttons are still live on the original message."

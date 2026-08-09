@@ -24,6 +24,25 @@ GROUP_CATEGORY = {
     str(config.VIP_12_CHAT_ID): "VIP_12",
 }
 
+# หัวข้อที่ยอมรับของแต่ละกลุ่ม (None = ทุกหัวข้อ)
+GROUP_TOPIC = {
+    str(config.VIP_WE_CHAT_ID): config.VIP_WE_TOPIC_ID or None,
+    str(config.VIP_12_CHAT_ID): config.VIP_12_TOPIC_ID or None,
+}
+
+
+def topic_allowed(chat_id, message_thread_id) -> bool:
+    """กลุ่มที่ตั้งหมายเลขหัวข้อไว้ จะรับสลิปเฉพาะหัวข้อนั้น
+
+    Telegram ใช้ chat id เดียวกันทุกหัวข้อในกลุ่ม จึงต้องดู message_thread_id เอง
+    หัวข้อ General ไม่มีเลขติดมา (เป็น None) จึงไม่มีทางตรงกับเลขที่ตั้งไว้
+    """
+    wanted = GROUP_TOPIC.get(str(chat_id))
+    if not wanted:
+        return True
+    return str(message_thread_id or "") == str(wanted)
+
+
 # สถานะที่ถือว่า "จบไปแล้วแบบไม่ได้บันทึก" จึงยอมให้ส่งสลิปใบเดิมเข้ามาใหม่ได้
 # interrupted = บอทดับระหว่างกำลังบันทึกลงชีท (กู้คืนตอนบูตครั้งถัดไป)
 REJECTED_STATUSES = {"reject", "rejected", "interrupted"}

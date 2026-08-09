@@ -14,6 +14,12 @@ class Config:
     VIP_WE_CHAT_ID = os.getenv("VIP_WE_CHAT_ID", "-1004418034373")
     VIP_12_CHAT_ID = os.getenv("VIP_12_CHAT_ID", "-5153291438")
 
+    # กลุ่มที่เปิดใช้ Topics จะมี chat id เดียวกันทุกหัวข้อ ต้องระบุหมายเลข topic
+    # ถึงจะแยกได้ว่าให้บอททำงานเฉพาะหัวข้อไหน — เว้นว่าง = รับทุกหัวข้อเหมือนเดิม
+    # หาเลขได้จากลิงก์ของข้อความในหัวข้อนั้น: t.me/c/<chat>/<topic>/<message>
+    VIP_WE_TOPIC_ID = (os.getenv("VIP_WE_TOPIC_ID") or "").strip()
+    VIP_12_TOPIC_ID = (os.getenv("VIP_12_TOPIC_ID") or "").strip()
+
     # user id ของคนที่กดปุ่ม Receive/Reject ได้ คั่นด้วย , เช่น "123456789,987654321"
     # ไม่ตั้งค่า = ไม่มีใครกดได้เลย (ตั้งใจให้เป็นแบบนี้ จะได้ไม่เผลอเปิดสิทธิ์ทิ้งไว้)
     SLIP_APPROVER_IDS = frozenset(

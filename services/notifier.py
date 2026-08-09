@@ -19,10 +19,18 @@ def send_telegram_message(chat_id: str, text: str) -> bool:
         logger.error("Cannot send notification: BOT_TOKEN is not configured")
         return False
 
+    # กลุ่มที่ใช้ Topics ถ้าไม่ระบุหัวข้อ ข้อความจะไปโผล่ที่ General ซึ่งอาจไม่มีใครเฝ้า
+    from core.matcher import GROUP_TOPIC
+
+    payload = {"chat_id": chat_id, "text": text}
+    topic = GROUP_TOPIC.get(str(chat_id))
+    if topic:
+        payload["message_thread_id"] = int(topic)
+
     try:
         response = requests.post(
             f"{TELEGRAM_API_URL}/bot{config.BOT_TOKEN}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
+            json=payload,
             timeout=15,
         )
     except Exception as exc:
