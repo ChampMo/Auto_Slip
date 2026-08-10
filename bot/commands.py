@@ -32,6 +32,7 @@ from database.crud import (
 from database.models import Transaction
 from database.session import SessionLocal
 from services.gdrive import drive_service
+from services.relay import relay_status
 from services.gsheets import (
     BUSINESS_DAY_STARTS_AT,
     BUSINESS_TZ,
@@ -712,8 +713,22 @@ async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not job_lines:
         job_lines = ["  (scheduler is not running)"]
 
+    # ตัวฟังข้อความจากบอทอื่น ถ้าหลุดแล้วไม่มีใครรู้ สลิปจากบอทตัวอื่นจะหายเงียบ
+    status = relay_status()
+    if not status["enabled"]:
+        relay_line = "off (not configured)"
+    elif status["connected"]:
+        # โชว์เวลาด้วย เพราะ "ต่ออยู่" ไม่ได้แปลว่ายังได้รับข้อความ
+        # session ที่ถูกยกเลิกอาจยังรายงานว่าต่ออยู่ระหว่างที่ Telethon พยายามต่อใหม่
+        seen_at = status.get("last_seen_at")
+        when = f"{describe_age(seen_at)}" if seen_at else "not yet"
+        relay_line = f"connected · last slip seen: {when}"
+    else:
+        relay_line = "⚠️ DISCONNECTED — slips from other bots are not coming in"
+
     await notice.edit_text(
         f"🩺 Health · {describe_version()}\n\n"
+        f"Relay:        {relay_line}\n"
         f"Database:     {database_line}\n"
         f"Drive folder: {sheet['folder']}\n"
         f"Month file:   {sheet['file']}\n"

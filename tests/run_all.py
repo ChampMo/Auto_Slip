@@ -9,7 +9,20 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING="utf-8")
+# ค่าที่ .env ของเครื่องนักพัฒนาอาจตั้งไว้แล้วทำให้ผลเทสต์เปลี่ยนไปคนละอย่าง
+# (เคยเจอ: ตั้ง VIP_WE_TOPIC_ID ไว้ในเครื่อง แล้วเทสต์ที่ไม่รู้เรื่องหัวข้อพังหมด)
+# บังคับให้เป็นค่าว่างเสมอ เทสต์ไหนต้องการค่าไหนให้ตั้งเองในไฟล์นั้น
+NEUTRAL = {
+    "VIP_WE_TOPIC_ID": "",
+    "VIP_12_TOPIC_ID": "",
+    "RELAY_API_ID": "",
+    "RELAY_API_HASH": "",
+    "API_ID": "",
+    "API_HASH": "",
+    "RELAY_SOURCE_BOTS": "",
+}
+
+env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONIOENCODING="utf-8", **NEUTRAL)
 
 files = sorted(p for p in (ROOT / "tests").glob("test_*.py"))
 failed = []

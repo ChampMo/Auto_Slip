@@ -148,6 +148,46 @@ def warn_about_open_slips() -> None:
                     chat_id, counts["total"], counts["needs_qr"])
 
 
+# จำไว้ว่าเคยแจ้งไปแล้วหรือยัง จะได้ไม่ยิงซ้ำทุก 5 นาทีจนกลุ่มรก
+_relay_alerted = {"down": False}
+
+
+def watch_relay() -> None:
+    """เฝ้าดูตัวฟัง ถ้าหลุดให้แจ้งในกลุ่มทันที
+
+    ตัวฟังหลุดแล้วเงียบคือความเสี่ยงที่ใหญ่ที่สุดของทางนี้ — ทุกอย่างดูปกติหมด
+    บอทยังตอบคำสั่งได้ กลุ่มยังเดินอยู่ แต่สลิปจากบอทตัวอื่นไม่เข้าระบบเลย
+    ถ้าไม่มีใครพิมพ์ /health ก็จะไม่มีใครรู้จนกว่าจะกระทบยอดปลายวัน
+    """
+    from services.relay import relay_status
+
+    status = relay_status()
+    if not status["enabled"]:
+        return
+
+    if status["connected"]:
+        if _relay_alerted["down"]:
+            _relay_alerted["down"] = False
+            logger.info("Relay is back")
+            for chat_id in GROUP_CATEGORY:
+                send_telegram_message(chat_id, "📡 ตัวฟังกลับมาทำงานแล้ว")
+        return
+
+    if _relay_alerted["down"]:
+        return   # แจ้งไปแล้ว รอจนกว่าจะกลับมาค่อยแจ้งใหม่
+
+    _relay_alerted["down"] = True
+    logger.warning("Relay is disconnected — telling the groups")
+    for chat_id in GROUP_CATEGORY:
+        send_telegram_message(
+            chat_id,
+            "⚠️ ตัวฟังข้อความหลุด\n\n"
+            "สลิปที่บอทตัวอื่นโพสต์จะไม่เข้าระบบจนกว่าจะแก้\n"
+            "ระหว่างนี้ให้ฟอร์เวิร์ดสลิปเข้ากลุ่มเองไปก่อน\n\n"
+            "ดูสถานะด้วย /health",
+        )
+
+
 def start_scheduler() -> BackgroundScheduler:
     """Start the daily scheduler for automatic jobs."""
     # ตั้งเวลาตามปฏิทินธุรกิจ ไม่ใช่นาฬิกาไทย งานสิ้นเดือนจึงตรงกับเดือนที่ระบบใช้จริง
@@ -167,6 +207,17 @@ def start_scheduler() -> BackgroundScheduler:
                 # ดีฟอลต์ของ APScheduler คือ 1 วินาที ถ้าเครื่องติดงานหนักตอนถึงเวลา
                 # งานจะถูกข้ามทั้งรอบแบบเงียบๆ — ยอมให้สายได้ถึง 1 ชั่วโมง
                 misfire_grace_time=3600,
+            )
+
+        if "watch_relay" not in existing_job_ids:
+            scheduler.add_job(
+                watch_relay,
+                # ทุก 5 นาที ถี่พอที่จะรู้เร็ว แต่ไม่ถี่จนเปลืองอะไร
+                trigger="interval", minutes=5,
+                id="watch_relay",
+                name="Check that the relay is still connected",
+                replace_existing=True,
+                misfire_grace_time=300,
             )
 
         if "nightly_warn_open_slips" not in existing_job_ids:

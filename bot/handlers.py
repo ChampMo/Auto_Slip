@@ -410,6 +410,7 @@ async def send_manual_review_message(
     with_duplicate: bool = False,
     with_receive: bool = True,
     with_retry: bool = False,
+    message_thread_id: int = None,
 ):
     """ข้อความขอให้แอดมินตัดสิน: หัวข้อ -> รายละเอียด -> สิ่งที่ต้องทำต่อ"""
     alert_text = (
@@ -421,6 +422,7 @@ async def send_manual_review_message(
     sent = await bot.send_message(
         chat_id=chat_id,
         reply_to_message_id=reply_to_message_id,
+        message_thread_id=message_thread_id,
         text=alert_text,
         reply_markup=get_approval_keyboard(
             batch_id, with_duplicate=with_duplicate,
@@ -554,7 +556,8 @@ async def download_and_scan_photo(message) -> tuple | None:
 
 
 async def collect_media_group_photo(media_group_id, bot, chat_id, msg_id, caption, qr_list,
-                                    photo_hash=None):
+                                    photo_hash=None, message_thread_id=None,
+                                    include_source_link=False):
     """พักรูปที่ส่งมาพร้อมกันในข้อความเดียว (อัลบั้ม) ไว้ก่อน แล้วค่อยประมวลผลรวมทีเดียว
 
     Telegram ส่งอัลบั้มมาเป็นคนละ message และติด caption มาแค่ใบเดียว
@@ -572,6 +575,10 @@ async def collect_media_group_photo(media_group_id, bot, chat_id, msg_id, captio
                 "qr_list": [],
                 "photo_hashes": [],
                 "photo_count": 0,
+                # หัวข้อและที่มาของชุด ต้องเก็บไว้ตั้งแต่รูปแรก
+                # ไม่งั้นตอนประมวลผลรวมจะไม่รู้ว่าต้องตอบที่หัวข้อไหนและต้องแนบลิงก์ไหม
+                "message_thread_id": message_thread_id,
+                "include_source_link": include_source_link,
                 "deadline": 0.0,
             }
             _media_groups[media_group_id] = group
@@ -627,6 +634,8 @@ async def flush_media_group(media_group_id, bot):
             group["qr_list"],
             group["photo_count"],
             group["photo_hashes"],
+            message_thread_id=group.get("message_thread_id"),
+            include_source_link=group.get("include_source_link", False),
         )
     except Exception:
         logger.exception("Failed to process media group | media_group_id=%s", media_group_id)
@@ -657,6 +666,8 @@ async def flush_pending_media_groups(bot):
             await process_slip_group(
                 bot, group["chat_id"], group["msg_id"], group["caption"],
                 group["qr_list"], group["photo_count"], group["photo_hashes"],
+                message_thread_id=group.get("message_thread_id"),
+                include_source_link=group.get("include_source_link", False),
             )
         except Exception:
             logger.exception("Failed to flush media group at shutdown | media_group_id=%s", media_group_id)
@@ -756,7 +767,9 @@ def build_qr_request_text(photo_count: int, reported: dict) -> str:
     return "\n".join(lines)
 
 
-async def ask_for_qr(bot, chat_id, msg_id, batch_id: str, photo_count: int, reported: dict) -> None:
+async def ask_for_qr(bot, chat_id, msg_id, batch_id: str, photo_count: int, reported: dict,
+                     message_thread_id: int = None,
+                     include_source_link: bool = False) -> None:
     """ขอ QR จากคนส่ง แล้วจำไว้ว่าคำถามนี้เป็นของสลิปใบไหน
 
     เก็บ id ของข้อความคำถามลงฐานข้อมูล ไม่ใช่หน่วยความจำ เพราะสลิปจะค้างรอ
@@ -765,7 +778,9 @@ async def ask_for_qr(bot, chat_id, msg_id, batch_id: str, photo_count: int, repo
     question = await bot.send_message(
         chat_id=chat_id,
         reply_to_message_id=msg_id,
-        text=build_qr_request_text(photo_count, reported),
+        message_thread_id=message_thread_id,
+        text=build_qr_request_text(photo_count, reported)
+             + source_link_line(chat_id, msg_id, include_source_link),
         reply_markup=get_qr_help_keyboard(batch_id),
     )
 
@@ -965,10 +980,25 @@ def describe_possible_duplicates(batch_id: str, amount) -> list:
     return lines
 
 
+def source_link_line(chat_id, msg_id, include: bool) -> str:
+    """บรรทัดลิงก์กลับไปที่สลิปต้นทาง
+
+    ใส่เฉพาะตอนที่ตอบแบบผูก reply ไม่ได้ (สลิปที่ตัวฟังจับมาจากบอทตัวอื่น)
+    ข้อความจะไปโผล่ในหัวข้อเดียวกันแต่ไม่มีเส้นโยง ถ้ามีหลายใบพร้อมกันจะแยกไม่ออก
+    ส่วนสลิปที่คนส่งเองไม่ต้องใส่ เพราะ Telegram โชว์ข้อความที่ถูกตอบให้อยู่แล้ว
+    """
+    if not include:
+        return ""
+    link = message_link(chat_id, msg_id)
+    return f"\n\nSlip: {link}" if link else ""
+
+
 async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[str],
                              photo_count: int, photo_hashes: list = None,
                              allow_without_qr: bool = False,
-                             force_batch_id: str = None):
+                             force_batch_id: str = None,
+                             message_thread_id: int = None,
+                             include_source_link: bool = False):
     """ตรวจสลิปทั้งชุด (1 รูป 1 QR, 1 รูปหลาย QR หรือหลายรูปในข้อความเดียว) เป็นรายการเดียว
 
     แบ่ง DB session เป็นช่วงสั้นๆ ไม่ถือ connection ค้างระหว่างรอ EasySlip หรือ Google
@@ -1029,6 +1059,7 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         await bot.send_message(
             chat_id=chat_id,
             reply_to_message_id=msg_id,
+            message_thread_id=message_thread_id,
             text=describe_duplicate(original),
         )
         return
@@ -1040,7 +1071,9 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
     # เดิมปล่อยให้แอดมินกดรับจากข้อมูลในแชทได้เลย ซึ่งแปลว่าเงินก้อนนั้นเข้าชีท
     # โดยไม่เคยถูกตรวจกับธนาคารสักครั้ง และไม่มีตัวกันสลิปซ้ำด้วย
     if status == "needs_qr":
-        await ask_for_qr(bot, chat_id, msg_id, batch_id, photo_count, reported)
+        await ask_for_qr(bot, chat_id, msg_id, batch_id, photo_count, reported,
+                         message_thread_id=message_thread_id,
+                         include_source_link=include_source_link)
         return
 
     # QR เสียจริงและมีคนยืนยันแล้ว = ตรวจกับธนาคารไม่ได้ ต้องให้คนตัดสินจากข้อมูลในแชท
@@ -1072,8 +1105,9 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
 
         await send_manual_review_message(
             bot, chat_id, msg_id, batch_id, no_qr_lines,
-            "Receive will ask for the transfer date and time, then the bank account.",
-            with_duplicate=bool(duplicate_lines),
+            "Receive will ask for the transfer date and time, then the bank account."
+            + source_link_line(chat_id, msg_id, include_source_link),
+            with_duplicate=bool(duplicate_lines), message_thread_id=message_thread_id,
         )
         return
 
@@ -1201,12 +1235,14 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
             await bot.send_message(
                 chat_id=chat_id,
                 reply_to_message_id=msg_id,
+                message_thread_id=message_thread_id,
                 text=(f"✅ Received automatically\n\n"
                       f"ID: {reported['id']}\n"
                       f"Sender: {sender_names_str or '-'}\n"
                       f"Account: {receiver_account or '-'}\n"
                       f"Amount: {format_thb(verified_total_amount)}\n\n"
-                      f"Saved to today's sheet."),
+                      f"Saved to today's sheet."
+                      + source_link_line(chat_id, msg_id, include_source_link)),
             )
         else:
             await send_manual_review_message(
@@ -1244,10 +1280,12 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         await bot.send_message(
             chat_id=chat_id,
             reply_to_message_id=msg_id,
+            message_thread_id=message_thread_id,
             text=("❌ Rejected automatically\n\n"
                   + ("\n".join(reject_reasons) or "• The slip details do not match this chat")
                   + "\n\nNothing was saved to the sheet. "
-                    "Correct the details and send the slip again."),
+                    "Correct the details and send the slip again."
+                  + source_link_line(chat_id, msg_id, include_source_link)),
         )
         return
 
@@ -1319,9 +1357,11 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         )
 
     await send_manual_review_message(
-        bot, chat_id, msg_id, batch_id, body_lines, footer_message,
+        bot, chat_id, msg_id, batch_id, body_lines,
+        footer_message + source_link_line(chat_id, msg_id, include_source_link),
         with_receive=not still_pending,
         with_retry=not api_success,
+        message_thread_id=message_thread_id,
     )
 
 

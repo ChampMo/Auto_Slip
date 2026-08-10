@@ -11,6 +11,9 @@ DB_PATH = os.path.join(tempfile.mkdtemp(), "gate.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_PATH}"
 os.environ["VIP_WE_CHAT_ID"] = "-100111"
 os.environ["VIP_12_CHAT_ID"] = "-100222"
+# .env ของเครื่องอาจตั้งหัวข้อไว้ ซึ่งจะทำให้รูปในเทสต์ถูกกรองทิ้งทั้งหมด
+os.environ["VIP_WE_TOPIC_ID"] = ""
+os.environ["VIP_12_TOPIC_ID"] = ""
 os.environ["SLIP_APPROVER_IDS"] = "111"
 
 for module_name in [
@@ -54,7 +57,8 @@ class FakeBot:
     def __init__(self):
         self.messages = []
 
-    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None):
+    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None,
+                           message_thread_id=None):
         self.messages.append({"text": text, "keyboard": reply_markup})
         return SimpleNamespace(message_id=9000 + len(self.messages))
 
@@ -144,7 +148,7 @@ async def main():
 
     collected = []
     real = h.process_slip_group
-    h.process_slip_group = lambda *a: collected.append(a) or asyncio.sleep(0)
+    h.process_slip_group = lambda *a, **kw: collected.append(a) or asyncio.sleep(0)
     await asyncio.sleep(0.3)
     check("  ประมวลผลเป็นชุดเดียว", len(collected), 1)
     check("  ได้ QR ครบทั้ง 2 ใบ", collected[0][4], ["QR_A", "QR_B"])

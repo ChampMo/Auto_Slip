@@ -62,7 +62,8 @@ class FakeBot:
     def __init__(self):
         self.messages = []
 
-    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None):
+    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None,
+                           message_thread_id=None):
         self.messages.append({"chat_id": chat_id, "text": text, "keyboard": reply_markup})
         return SimpleNamespace(message_id=9000 + len(self.messages))
 
@@ -183,7 +184,7 @@ async def flow_tests():
     processed = []
 
     async def fake_group(bot_, chat_id, msg_id, caption, qr_list, photo_count,
-                         photo_hashes=None, allow_without_qr=False):
+                         photo_hashes=None, allow_without_qr=False, **kw):
         processed.append({"msg_id": msg_id, "qr": list(qr_list), "photos": photo_count})
 
     real = h.process_slip_group

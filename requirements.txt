@@ -13,3 +13,5 @@ apscheduler==3.10.4
 gspread>=6.0,<7.0
 google-auth>=2.0,<3.0
 google-api-python-client>=2.0,<3.0
+# ตัวฟังข้อความจากบอทตัวอื่น (ใช้บัญชีคนจริงผ่าน MTProto)
+telethon

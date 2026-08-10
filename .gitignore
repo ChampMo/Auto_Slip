@@ -50,3 +50,8 @@ venv.bak/
 .idea/
 *.swp
 .DS_Store
+
+# session ของบัญชีคนจริงที่ตัวฟังใช้ — หลุดเมื่อไหร่บัญชีนั้นถูกยึด
+*.session
+*.session-journal
+data/

@@ -666,7 +666,7 @@
       โดยไม่ต้องมีคนพิมพ์เอง — เหลือให้คนตัดสินเฉพาะรายการที่ระบบไม่กล้าตัดสินแทน
     </p>
     <div class="masthead-meta">
-      <span data-en="<b>Version</b> 1.4.2 (2026-08-09)"><b>เวอร์ชัน</b> 1.4.2 (2026-08-09)</span>
+      <span data-en="<b>Version</b> 1.7.0 (2026-08-10)"><b>เวอร์ชัน</b> 1.7.0 (2026-08-10)</span>
       <span data-en="<b>Project</b> Deposit Check"><b>โปรเจกต์</b> Deposit Check</span>
       <span data-en="<b>Groups</b> VIP_WE · VIP_12"><b>กลุ่มที่รองรับ</b> VIP_WE · VIP_12</span>
       <span data-en="<b>Destination</b> Google Sheets"><b>ปลายทาง</b> Google Sheets</span>
@@ -1392,6 +1392,38 @@ Choose Receive to save it to today's sheet, or Reject to discard it.
           รายการนี้ถูกใช้ทั้งตอนตรวจอัตโนมัติและตอนขึ้นปุ่มให้เลือกบัญชี
         </p>
       </section>
+
+      <section id="relay">
+        <h2><span class="n">เพิ่มเติม</span>สลิปที่บอทตัวอื่นโพสต์</h2>
+        <p>
+          Telegram ไม่ส่งข้อความที่บอทตัวหนึ่งโพสต์ ให้บอทอีกตัวรับรู้ เป็นข้อจำกัดของแพลตฟอร์ม
+          ที่แก้ในโค้ดบอทไม่ได้ สลิปที่ระบบแจ้งเตือนอัตโนมัติโพสต์เข้ามาจึงไม่ถึง Auto Slip เลย
+        </p>
+        <p>
+          ระบบจึงมี <b>ตัวฟัง</b> ที่ล็อกอินด้วยบัญชีคนจริง คอยจับข้อความพวกนั้นแล้วส่งเข้ากระบวนการเดิม
+          ภายในโปรแกรม — Auto Slip ยังเป็นคนตอบและขึ้นปุ่มให้กดเหมือนเดิมทุกอย่าง
+          ต่างกันแค่ข้อความจะไม่ผูกกับสลิปแบบ reply จึง<b>แนบลิงก์กลับไปที่สลิปต้นทาง</b>ไว้ให้แทน
+        </p>
+        <div class="callout">
+          <h3>ข้อจำกัดที่ต้องรู้</h3>
+          <p>
+            ตัวฟังอ่านได้เฉพาะข้อความที่เกิด<b>หลังจากมันเชื่อมต่อแล้ว</b> ข้อความเก่าก่อนหน้านั้น
+            หรือช่วงที่ตัวฟังหลุด จะไม่มีทางดึงย้อนหลังได้ ต้องให้คนฟอร์เวิร์ดเข้ามาเอง
+            ระบบจะแจ้งในกลุ่มทันทีที่ตัวฟังหลุดและตอนกลับมา จะได้รู้ว่าช่วงไหนต้องตรวจย้อน
+          </p>
+        </div>
+        <div class="table-scroll"><table>
+          <caption>ตั้งค่าใน .env</caption>
+          <thead><tr><th>ตัวแปร</th><th>ใส่อะไร</th></tr></thead>
+          <tbody>
+            <tr><td><code>API_ID</code> · <code>API_HASH</code></td><td>ขอที่ my.telegram.org ด้วยเบอร์ของบัญชีที่ใช้เป็นตัวฟัง — ไม่ตั้ง = ปิดตัวฟัง ระบบทำงานปกติทุกอย่าง</td></tr>
+            <tr><td><code>RELAY_SESSION</code></td><td>ที่เก็บ session ต้อง mount ออกนอกคอนเทนเนอร์ ไม่งั้นหายทุกครั้งที่ rebuild</td></tr>
+            <tr><td><code>RELAY_SOURCE_BOTS</code></td><td>ชื่อบอทที่ยอมรับ คั่นด้วย , — เว้นว่างคือรับจากบอทตัวไหนก็ได้ (แนะนำ เพราะตั้งชื่อผิดแล้วสลิปจะหายเงียบ)</td></tr>
+            <tr><td><code>VIP_WE_TOPIC_ID</code> · <code>VIP_12_TOPIC_ID</code></td><td>กลุ่มที่เปิด Topics ใส่หมายเลขหัวข้อเพื่อให้ทำงานเฉพาะหัวข้อนั้น เว้นว่าง = รับทุกหัวข้อ</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
 
       <footer class="doc-foot">
         <p style="margin:0" data-en="Auto Slip · guide to the automated deposit-slip checking system · every reply the bot sends is in English by design">

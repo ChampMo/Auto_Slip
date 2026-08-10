@@ -9,6 +9,7 @@ from telegram.ext import (
     filters,
 )
 from telegram import BotCommand
+from telegram.ext import Defaults
 from bot.commands import (
     approver_add_command,
     approver_remove_command,
@@ -29,6 +30,7 @@ from bot.handlers import (
     load_approver_ids,
 )
 from bot.recovery import recover_interrupted_slips
+from services.relay import relay_enabled, start_relay, stop_relay
 from services.easyslip import validate_company_accounts
 from scheduler import start_scheduler
 
@@ -55,10 +57,21 @@ async def on_startup(application) -> None:
         # ไม่ใช่เรื่องคอขาดบาดตาย ถ้าลงทะเบียนไม่ได้ก็ยังพิมพ์คำสั่งเองได้
         print(f"⚠️ ลงทะเบียนเมนูคำสั่งไม่สำเร็จ: {exc}")
 
+    # ตัวฟังเปิดไม่ได้ก็ต้องไม่ลากบอทหลักล้มไปด้วย สลิปที่คนส่งเองยังต้องทำงานปกติ
+    if relay_enabled():
+        try:
+            await start_relay(application.bot)
+        except Exception as exc:
+            print(f"⚠️ เปิดตัวฟังข้อความจากบอทอื่นไม่สำเร็จ: {exc}")
+            print("   สลิปจากบอทตัวอื่นจะไม่เข้าระบบ ต้องให้คนฟอร์เวิร์ดเข้ามาแทน")
+    else:
+        print("ℹ️ ยังไม่ได้ตั้งค่าตัวฟังข้อความจากบอทอื่น (RELAY_API_ID / RELAY_API_HASH)")
+
 
 async def on_shutdown(application) -> None:
     """เคลียร์อัลบั้มที่ยังรอรวมอยู่ก่อนปิด ไม่ให้สลิปหายตอน deploy/restart"""
     await flush_pending_media_groups(application.bot)
+    await stop_relay()
 
 
 if __name__ == "__main__":
@@ -105,9 +118,23 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"⚠️ Scheduler ไม่สามารถเริ่มได้: {exc}")
 
+    # Telegram ไม่ยอมให้บอทตอบกลับข้อความที่บอทตัวอื่นโพสต์ (มองไม่เห็นข้อความนั้น)
+    # ถ้าไม่ตั้งค่านี้ ข้อความผลตรวจของสลิปที่ตัวฟังจับมาจะส่งไม่ออกเลยทั้งใบ
+    # ตั้งไว้แล้วจะส่งแบบไม่ผูก reply แทนการโยน error ทิ้ง
+    #
+    # ห่อ try ไว้เพราะพารามิเตอร์นี้ถูกประกาศเลิกใช้ใน PTB รุ่นใหม่
+    # ถ้าวันหนึ่งมันถูกถอดออก บอทต้องยังบูตขึ้นได้ ไม่ใช่ล้มทั้งตัว
+    try:
+        reply_defaults = Defaults(allow_sending_without_reply=True)
+    except TypeError:
+        print("⚠️ PTB รุ่นนี้ไม่รองรับ allow_sending_without_reply")
+        print("   สลิปที่ตัวฟังจับมาจะตอบกลับไม่ได้ ต้องแก้เป็นส่งแบบไม่ผูก reply")
+        reply_defaults = None
+
     app = (
         ApplicationBuilder()
         .token(config.BOT_TOKEN)
+        .defaults(reply_defaults)
         .post_init(on_startup)
         .post_stop(on_shutdown)
         .build()

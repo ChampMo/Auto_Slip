@@ -80,7 +80,8 @@ class FakeBot:
     def __init__(self):
         self.messages = []
 
-    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None):
+    async def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None,
+                           message_thread_id=None):
         self.messages.append({"text": text, "reply_to": reply_to_message_id, "keyboard": reply_markup})
 
 

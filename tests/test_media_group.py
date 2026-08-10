@@ -44,7 +44,7 @@ processed = []
 
 
 async def fake_process_slip_group(bot, chat_id, msg_id, caption, qr_list, photo_count,
-                                  photo_hashes=None, allow_without_qr=False):
+                                  photo_hashes=None, allow_without_qr=False, **kw):
     processed.append({
         "chat_id": chat_id, "msg_id": msg_id, "caption": caption,
         "qr_list": list(qr_list), "photo_count": photo_count,

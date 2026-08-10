@@ -23,6 +23,9 @@ services:
     volumes:
       - ./.env:/app/.env
       - ./credentials.json:/app/credentials.json
+      # session ของตัวฟัง ต้องอยู่นอกคอนเทนเนอร์
+      # ไม่งั้นหายทุกครั้งที่ rebuild แล้วต้องกรอก OTP ใหม่ทุกรอบ
+      - ./data:/app/data
     # นำ .env โยนเข้าไปใน Container ด้วย
     env_file:
       - .env
