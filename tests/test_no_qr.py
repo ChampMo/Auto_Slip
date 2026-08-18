@@ -78,7 +78,7 @@ async def main():
     msg = await run([], CAP_TRANS, photo_count=1, msg_id=200)
     check("ทวง QR", "🔍 QR code needed" in msg["text"], True)
     check("  มีปุ่มให้กด", msg["keyboard"] is not None, True)
-    check("  บอกว่าอ่าน QR ไม่ได้", "No QR code could be read from this photo" in msg["text"], True)
+    check("  บอกว่าอ่าน QR ไม่ได้", "QR code needed" in msg["text"], True)
     check("  โชว์ข้อมูลจากแชท", "0000123" in msg["text"] and "400.00 THB" in msg["text"], True)
     check("  บอกวิธีตอบกลับ", "Reply to THIS message" in msg["text"], True)
     check("  ไม่มี backtick โผล่ในข้อความ", "`" in msg["text"], False)
@@ -97,7 +97,7 @@ async def main():
     print("\n=== อัลบั้ม 2 รูปอ่านไม่ออกทั้งคู่ (format User ไม่มี TRANS ID) ===")
     msg = await run([], CAP_USER, photo_count=2, msg_id=201)
     check("ทวง QR", "🔍 QR code needed" in msg["text"], True)
-    check("  นับจำนวนรูปถูก", "these 2 photos" in msg["text"], True)
+    check("  ยังบอกว่าต้องส่ง QR มา", "Reply to THIS message" in msg["text"], True)
     check("  โชว์ User จากแชท", "benz4455" in msg["text"], True)
 
     with SessionLocal() as db:

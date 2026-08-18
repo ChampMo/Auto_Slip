@@ -199,7 +199,7 @@ async def main():
     check("  audit บันทึกว่าใครใส่ยอด", "amount_entered_manually" in actions_of("amt1"), True)
     check("  สถานะยังไม่ถูกตัดสิน", slip("amt1").status, "pending")
     # สลิปใบนี้อ่านอะไรไม่ได้เลย เวลาโอนจึงไม่รู้ด้วย ต้องถามต่อก่อนไปเลือกธนาคาร
-    check("  ถามเวลาโอนต่อ", "🕒 Transfer time needed" in text_of(answer.last), True)
+    check("  ถามเวลาโอนต่อ", "Date and time needed" in text_of(answer.last), True)
     check("  ยังไม่ขึ้นปุ่มธนาคาร", getattr(answer.last, "keyboard", None), None)
 
     print("\n=== ตอบเวลาโอนกลับมา -> ค่อยไปเลือกธนาคาร ===")

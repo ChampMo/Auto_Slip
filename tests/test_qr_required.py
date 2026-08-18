@@ -104,9 +104,10 @@ plain = button_data(lambda: get_approval_keyboard("b1"))
 with_dup = button_data(lambda: get_approval_keyboard("b1", with_duplicate=True))
 check("ปกติไม่มีปุ่ม Duplicate", any(d.startswith("dup_") for d in plain), False)
 check("  สงสัยว่าซ้ำ -> มีปุ่ม", any(d.startswith("dup_") for d in with_dup), True)
-check("  ยังมี Receive/Reject ครบ", len(with_dup), 4)
+check("  ยังมี Receive/Reject ครบ", len(with_dup), 3)
 # ปุ่มเติม QR ต้องมีทุกใบที่ให้คนตัดสิน เพราะระบบไม่มีทางรู้เองว่าอ่าน QR ได้ไม่ครบ
-check("  มีปุ่มเติม QR เสมอ", any(d.startswith("addqr_") for d in plain), True)
+# ปุ่มเติม QR ถูกปิดไว้ — ปุ่มค้างทำให้ดูเหมือนงานยังไม่จบ ใช้ /recheck แทน
+check("  ไม่มีปุ่มเติม QR แล้ว", any(d.startswith("addqr_") for d in plain), False)
 check("  Duplicate ถือว่าตัดสินแล้ว", "Duplicate" in DECIDED_STATUSES, True)
 # ถ้าอยู่ใน REJECTED_STATUSES จะปลดล็อกให้ส่งใบเดิมเข้ามาได้อีก ซึ่งผิด
 check("  ไม่ปลดล็อกให้ส่งซ้ำ", "duplicate" in REJECTED_STATUSES, False)

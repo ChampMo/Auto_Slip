@@ -46,6 +46,8 @@ _ADDED_COLUMNS = {
         "raw_caption": "VARCHAR(500)",
         "receiver_names": "VARCHAR(300)",
         "receiver_account": "VARCHAR(255)",
+        # เหตุผลของด่านบัญชีผู้รับ เพิ่มใน v1.16.0 — แถวเก่าจะเป็น NULL
+        "receiver_note": "VARCHAR(255)",
         "caption_warning": "VARCHAR(200)",
         "review_msg_id": "VARCHAR(50)",
         # เวลาโอนจากสลิป เพิ่มเข้ามาใน v1.2.0 — แถวเก่าจะเป็น NULL

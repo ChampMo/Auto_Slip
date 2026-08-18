@@ -12,6 +12,7 @@ from core.captions import (
 )
 from core.config import config
 from core.scanner import file_sha256, read_qr_code
+from bot.ephemeral import notice_and_expire
 from bot.keyboards import (
     get_add_qr_keyboard,
     get_approval_keyboard,
@@ -47,6 +48,7 @@ import json
 from database.models import (
     NAMES_LIST_MAX,
     QR_REF_MAX,
+    RECEIVER_NOTE_MAX,
     TRANSFER_TIME_MAX,
     WARNING_MAX,
     Transaction,
@@ -146,14 +148,64 @@ def resolve_known_bank_value(txn) -> str:
     return ""
 
 
-def build_bank_mismatch_reason(bank_codes: list[str], bank_matches: list[bool]) -> str:
-    """อธิบายให้แอดมินเข้าใจว่าทำไมบัญชีผู้รับไม่ผ่าน (เลี่ยงศัพท์ในโค้ด)"""
+# หัวข้อของด่านบัญชีผู้รับ เปลี่ยนตามสาเหตุจริง
+# "ไม่ใช่บัญชีเรา" กับ "เลขตรงแต่ชื่อไม่ตรง" เป็นคนละเรื่องกันโดยสิ้นเชิง
+# ถ้าเขียนเหมือนกันหมด คนกดปุ่มจะเข้าใจผิดแล้วตัดสินผิด
+ACCOUNT_CHECK_TITLE_UNSURE = "Receiver account needs a check"
+ACCOUNT_CHECK_TITLE_NOT_OURS = "Receiver account is not ours"
+
+
+def build_bank_mismatch_reason(bank_codes: list[str], bank_matches: list[bool],
+                               reasons: list[str] = None,
+                               owner_names: list[str] = None,
+                               candidates: list[str] = None,
+                               bank_labels: list[str] = None) -> str:
+    """อธิบายให้แอดมินเข้าใจว่าทำไมบัญชีผู้รับไม่ผ่าน (เลี่ยงศัพท์ในโค้ด)
+
+    เหตุผลต้องตรงกับสิ่งที่เกิดขึ้นจริง เพราะคนกดปุ่มใช้บรรทัดนี้ตัดสิน
+    """
+    reasons = list(reasons or [])
+    owner_names = list(owner_names or [])
+    candidates = list(candidates or [])
+    bank_labels = list(bank_labels or [])
+
+    def at(values: list, index: int) -> str:
+        return str(values[index]) if index < len(values) else ""
+
+    for index, reason in enumerate(reasons):
+        account = at(bank_codes, index) or "the receiver account"
+        candidate = at(candidates, index) or "a company account"
+
+        if reason == "bank_mismatch":
+            slip_bank = at(bank_labels, index) or "another bank"
+            return (f"{account} matches {candidate} digit by digit, "
+                    f"but the slip is from {slip_bank}")
+
+        if reason == "owner_mismatch":
+            owner = at(owner_names, index) or "someone else"
+            return (f"{account} matches {candidate} digit by digit, "
+                    f"but the slip pays {owner}")
+
+        if reason == "ambiguous":
+            return f"{account} matches more than one company account — cannot tell which"
+
+        if reason in ("fully_masked", "no_account"):
+            return "could not read the receiver account from the slip"
+
     mismatched_codes = [code for code, matched in zip(bank_codes, bank_matches) if code and not matched]
     if mismatched_codes:
         return f"account ending in {', '.join(mismatched_codes)} is not a company account"
     if bank_codes:
         return "the receiver account is not a company account"
     return "could not read the receiver account from the slip"
+
+
+def account_check_title(reasons: list[str] = None) -> str:
+    """เลขตรงแต่ธนาคาร/ชื่อไม่ตรง ยังไม่ใช่ข้อสรุปว่า 'ไม่ใช่บัญชีเรา'"""
+    for reason in list(reasons or []):
+        if reason in ("bank_mismatch", "owner_mismatch", "ambiguous"):
+            return ACCOUNT_CHECK_TITLE_UNSURE
+    return ACCOUNT_CHECK_TITLE_NOT_OURS
 
 
 def amounts_match(expected_amount: float | None, actual_amount: float | None) -> bool:
@@ -254,12 +306,14 @@ def build_checks_from_record(txn) -> list[dict]:
             "chat": format_thb(chat_amount) if chat_amount is not None else "(not given)",
         },
         {
-            "title": "Receiver account is not ours",
+            "title": (ACCOUNT_CHECK_TITLE_UNSURE if (txn.receiver_note or "").strip()
+                      else ACCOUNT_CHECK_TITLE_NOT_OURS),
             "short": "Account",
             "passed": account in BANK_DROPDOWN_VALUES,
             "value": account or "-",
-            "reason": (f"{account} is not a company account" if account
-                       else "the receiver account was never read from the slip"),
+            "reason": ((txn.receiver_note or "").strip()
+                       or (f"{account} is not a company account" if account
+                           else "the receiver account was never read from the slip")),
         },
     ]
 
@@ -346,6 +400,11 @@ def verify_slip_batch(qr_list: list[str], batch_id: str) -> dict:
         "bank_codes": [],
         "bank_matches": [],
         "bank_resolved": [],
+        # ทำไมบัญชีผู้รับถึงผ่าน/ไม่ผ่าน เก็บไว้เขียนข้อความให้คนกดปุ่มอ่าน
+        "bank_reasons": [],
+        "receiver_owner_names": [],
+        "receiver_candidates": [],
+        "receiver_bank_labels": [],
         # เวลาโอนของแต่ละใบ ใบที่อ่านเวลาไม่ได้จะเป็น None
         "transfer_times": [],
         "raw_data_by_qr": {},
@@ -378,6 +437,10 @@ def verify_slip_batch(qr_list: list[str], batch_id: str) -> dict:
             result["bank_codes"].append(api_result.get("receiver_bank_code", ""))
             result["bank_matches"].append(api_result.get("receiver_bank_matches", False))
             result["bank_resolved"].append(api_result.get("receiver_bank_resolved", False))
+            result["bank_reasons"].append(api_result.get("receiver_reason", ""))
+            result["receiver_owner_names"].append(api_result.get("receiver_owner_name", ""))
+            result["receiver_candidates"].append(api_result.get("receiver_candidate", ""))
+            result["receiver_bank_labels"].append(api_result.get("receiver_bank_label", ""))
             result["transfer_times"].append(api_result.get("transfer_at"))
 
             result["raw_data_by_qr"][qr] = json.dumps(api_result["raw_data"], ensure_ascii=False)
@@ -400,6 +463,29 @@ def verify_slip_batch(qr_list: list[str], batch_id: str) -> dict:
     return result
 
 
+async def finish_message(bot, notice, chat_id, msg_id, text,
+                         reply_markup=None, message_thread_id=None):
+    """ส่งผลตรวจ โดยแก้ข้อความ "กำลังตรวจ" ที่ส่งไปก่อนแล้วถ้ามี
+
+    การตรวจสลิปใช้เวลาไม่เท่ากันในแต่ละใบ (ธนาคารช้าบ้างเร็วบ้าง บางใบลองซ้ำ 3 รอบ)
+    ถ้าเงียบไปเฉยๆ คนส่งจะไม่รู้ว่าบอทเห็นสลิปแล้วหรือยัง แล้วมักส่งซ้ำ
+    แก้ข้อความเดิมแทนการส่งใหม่ จะได้ไม่มีข้อความ "กำลังตรวจ" ค้างเป็นขยะ
+    """
+    if notice is not None:
+        try:
+            return await notice.edit_text(text, reply_markup=reply_markup)
+        except Exception as exc:
+            # แก้ไม่ได้ (ถูกลบไปแล้ว/หมดเวลาแก้) ก็ส่งใหม่ ดีกว่าไม่มีผลตรวจเลย
+            logger.info("Could not edit the checking notice | error=%s", exc)
+    return await bot.send_message(
+        chat_id=chat_id,
+        reply_to_message_id=msg_id,
+        message_thread_id=message_thread_id,
+        text=text,
+        reply_markup=reply_markup,
+    )
+
+
 async def send_manual_review_message(
     bot,
     chat_id: str,
@@ -410,7 +496,9 @@ async def send_manual_review_message(
     with_duplicate: bool = False,
     with_receive: bool = True,
     with_retry: bool = False,
+    with_add_qr: bool = True,
     message_thread_id: int = None,
+    notice=None,
 ):
     """ข้อความขอให้แอดมินตัดสิน: หัวข้อ -> รายละเอียด -> สิ่งที่ต้องทำต่อ"""
     alert_text = (
@@ -419,15 +507,14 @@ async def send_manual_review_message(
         + f"\n\n{footer_message}"
     )
 
-    sent = await bot.send_message(
-        chat_id=chat_id,
-        reply_to_message_id=reply_to_message_id,
-        message_thread_id=message_thread_id,
-        text=alert_text,
+    sent = await finish_message(
+        bot, notice, chat_id, reply_to_message_id, alert_text,
         reply_markup=get_approval_keyboard(
             batch_id, with_duplicate=with_duplicate,
             with_receive=with_receive, with_retry=with_retry,
+            with_add_qr=with_add_qr,
         ),
+        message_thread_id=message_thread_id,
     )
     remember_review_message(batch_id, getattr(sent, "message_id", None))
     return sent
@@ -513,14 +600,16 @@ async def download_and_scan_photo(message) -> tuple | None:
         )
 
     except TimedOut:
-        await message.reply_text(
+        await notice_and_expire(
+            message,
             "⚠️ Could not download the photo\n\n"
             "Telegram timed out. Please send the slip again."
         )
         return None
 
     except NetworkError:
-        await message.reply_text(
+        await notice_and_expire(
+            message,
             "⚠️ Could not download the photo\n\n"
             "Connection to Telegram failed. Please send the slip again."
         )
@@ -740,30 +829,30 @@ def has_usable_caption(caption: str) -> bool:
 QR_READER_URL = "https://qrcodescan.in/"
 
 
+def describe_reported_line(reported: dict) -> str:
+    """ข้อมูลที่แชทแจ้งมา อัดเป็นบรรทัดเดียว: ID · ชื่อ · ยอด"""
+    return " · ".join([
+        str(reported["id"]),
+        reported["name"] or "-",
+        format_thb(reported["amount"]),
+    ])
+
+
 def build_qr_request_text(photo_count: int, reported: dict) -> str:
-    """ข้อความทวง QR — ต้องบอกวิธีให้ครบ เพราะคนส่งสลิปไม่ใช่คนเขียนโปรแกรม"""
-    photo_word = "this photo" if photo_count == 1 else f"these {photo_count} photos"
+    """ข้อความทวง QR — สั้นที่สุดเท่าที่ยังบอกวิธีทำได้ครบ
+
+    กลุ่มนี้มีสลิปเข้าหลายสิบใบต่อวัน ข้อความยาวๆ ทำให้เลื่อนหาของเก่าไม่เจอ
+    เอาข้อมูลที่แจ้งมาอัดเป็นบรรทัดเดียว และเหลือวิธีตอบแค่ประโยคเดียว
+    """
     lines = [
         "🔍 QR code needed",
+        describe_reported_line(reported),
         "",
-        f"No QR code could be read from {photo_word}, so this slip cannot be "
-        "checked against the bank yet. Nothing has been recorded.",
-        "",
-        "Details reported in this chat:",
-        f"• ID: {reported['id']}",
-        f"• Name: {reported['name'] or '-'}",
-        f"• Amount: {format_thb(reported['amount'])}",
-        "",
-        "Reply to THIS message with either one:",
-        "",
-        "1. A picture of just the QR code — open the slip, zoom in on the QR "
-        "and take a screenshot of that part alone.",
-        "",
-        f"2. The QR code as text — open {QR_READER_URL}, upload the slip, "
-        "copy the long code it gives you and paste it here.",
+        "↪️ Reply to THIS message with the QR — a photo of "
+        "just the QR, or the code as text (read it at " + QR_READER_URL + ").",
     ]
     if reported["warning"]:
-        lines.insert(3, f"⚠️ {reported['warning']}\n")
+        lines.insert(2, f"⚠️ {reported['warning']}")
     return "\n".join(lines)
 
 
@@ -809,7 +898,7 @@ def find_slip_awaiting_qr(db, chat_id, question_msg_id):
     )
 
 
-async def resume_slip_with_qr(bot, txn_row: dict, qr_list: list) -> bool:
+async def resume_slip_with_qr(bot, txn_row: dict, qr_list: list, notice=None) -> bool:
     """เอา QR ที่เพิ่งได้มา ต่อยอดสลิปใบที่ค้างอยู่ให้ตรวจต่อได้
 
     ใช้ caption ของข้อความต้นฉบับ ไม่ใช่ของข้อความที่ส่ง QR มา
@@ -842,6 +931,9 @@ async def resume_slip_with_qr(bot, txn_row: dict, qr_list: list) -> bool:
         bot, txn_row["chat_id"], txn_row["msg_id"], txn_row["caption"],
         merged, photo_count=1, photo_hashes=[txn_row["photo_hash"]],
         force_batch_id=txn_row["batch_id"],
+        message_thread_id=txn_row.get("message_thread_id"),
+        include_source_link=True,
+        notice=notice,
     )
     return True
 
@@ -883,11 +975,12 @@ async def handle_qr_photo_reply(bot, message, qr_list: list, waiting: dict) -> b
     ผู้เรียกหา waiting มาให้แล้ว เพราะต้องรู้ตั้งแต่ก่อนโหลดไฟล์ว่าเป็นคำตอบไหม
     """
     if not may_answer_qr_request(getattr(message, "from_user", None)):
-        await message.reply_text(QR_NOT_ALLOWED_TEXT)
+        await notice_and_expire(message, QR_NOT_ALLOWED_TEXT)
         return True
 
     if not qr_list:
-        await message.reply_text(
+        await complain_on_request(
+            message,
             "⚠️ Still no QR code in that picture\n\n"
             "Crop tighter so the whole QR square fills the picture, and make sure "
             "it is not blurred. You can also paste the QR code as text instead — "
@@ -895,7 +988,8 @@ async def handle_qr_photo_reply(bot, message, qr_list: list, waiting: dict) -> b
         )
         return True
 
-    await resume_slip_with_qr(bot, waiting, qr_list)
+    await resume_slip_with_qr(bot, waiting, qr_list,
+                              notice=getattr(message, "reply_to_message", None))
     return True
 
 
@@ -908,12 +1002,13 @@ async def handle_qr_text_reply(message) -> bool:
         return False
 
     if not may_answer_qr_request(getattr(message, "from_user", None)):
-        await message.reply_text(QR_NOT_ALLOWED_TEXT)
+        await notice_and_expire(message, QR_NOT_ALLOWED_TEXT)
         return True
 
     payload = (message.text or "").strip()
     if not looks_like_qr_payload(payload):
-        await message.reply_text(
+        await complain_on_request(
+            message,
             "⚠️ That does not look like a QR code\n\n"
             "The code is one long line with no spaces, usually starting with 00 "
             f"and around 100–200 characters. Read it at {QR_READER_URL} then paste "
@@ -921,7 +1016,8 @@ async def handle_qr_text_reply(message) -> bool:
         )
         return True
 
-    await resume_slip_with_qr(message.get_bot(), waiting, [payload])
+    await resume_slip_with_qr(message.get_bot(), waiting, [payload],
+                              notice=getattr(message, "reply_to_message", None))
     return True
 
 
@@ -972,11 +1068,12 @@ def describe_possible_duplicates(batch_id: str, amount) -> list:
     if not found:
         return []
 
-    lines = ["", f"⚠️ Possible duplicate — {len(found)} other slip(s) today "
-                 f"have the same amount:"]
-    for slip_id, link in found[:5]:
-        lines.append(f"• ID {slip_id}{' — ' + link if link else ''}")
-    lines.append("Check that this is not the same transfer before receiving it.")
+    lines = ["", f"⚠️ {len(found)} other slip(s) today have the same amount:"]
+    # ลิสต์ยาวๆ ไม่ช่วยตัดสิน เอาแค่ 3 อันแรกไว้กดดูเทียบ ที่เหลือบอกเป็นจำนวน
+    for slip_id, link in found[:3]:
+        lines.append(f"• {slip_id}{' — ' + link if link else ''}")
+    if len(found) > 3:
+        lines.append(f"• … and {len(found) - 3} more")
     return lines
 
 
@@ -998,7 +1095,8 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
                              allow_without_qr: bool = False,
                              force_batch_id: str = None,
                              message_thread_id: int = None,
-                             include_source_link: bool = False):
+                             include_source_link: bool = False,
+                             notice=None):
     """ตรวจสลิปทั้งชุด (1 รูป 1 QR, 1 รูปหลาย QR หรือหลายรูปในข้อความเดียว) เป็นรายการเดียว
 
     แบ่ง DB session เป็นช่วงสั้นๆ ไม่ถือ connection ค้างระหว่างรอ EasySlip หรือ Google
@@ -1093,13 +1191,7 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         ]
         if reported["warning"]:
             no_qr_lines.append(f"⚠️ {reported['warning']}")
-        no_qr_lines.extend([
-            "",
-            "Details reported in this chat:",
-            f"• ID: {reported['id']}",
-            f"• Name: {reported['name'] or '-'}",
-            f"• Amount: {format_thb(reported['amount'])}",
-        ])
+        no_qr_lines.append(describe_reported_line(reported))
         duplicate_lines = describe_possible_duplicates(batch_id, reported["amount"])
         no_qr_lines.extend(duplicate_lines)
 
@@ -1110,6 +1202,21 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
             with_duplicate=bool(duplicate_lines), message_thread_id=message_thread_id,
         )
         return
+
+    # บอกให้รู้ทันทีว่าเห็นสลิปแล้ว ก่อนเริ่มตรวจซึ่งกินเวลาไม่แน่นอน
+    # ผลตรวจจะมาแก้ข้อความนี้ทีหลัง ไม่ได้ส่งใหม่
+    # ผู้เรียกส่งข้อความเดิมมาให้แก้ได้ (เช่นข้อความที่เพิ่งขอวันเวลาไป)
+    # จะได้เหลือข้อความเดียวต่อสลิปหนึ่งใบ ไม่ใช่ทยอยโพสต์ใหม่ทีละขั้น
+    try:
+        if notice is None:
+            notice = await bot.send_message(
+            chat_id=chat_id,
+            reply_to_message_id=msg_id,
+            message_thread_id=message_thread_id,
+                text="🔎 Checking this slip with the bank...",
+            )
+    except Exception as exc:
+        logger.info("Could not send the checking notice | error=%s", exc)
 
     # ── ช่วงที่ 2: ยิง API ตรวจสลิป (ไม่ถือ session และไม่แช่แข็ง event loop) ──
     print(f"🔎 Verifying {len(qr_data_list)} slip(s) from {photo_count} photo(s) via API...")
@@ -1127,6 +1234,11 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
     multi_slip_batch = len(qr_data_list) > 1 or photo_count > 1
     is_name_match = is_reported_name_verified(batch_result["senders"], chat_name)
     bank_matches = all(batch_result["bank_matches"]) if batch_result["bank_matches"] else False
+    account_problem_text = build_bank_mismatch_reason(
+        batch_result["bank_codes"], batch_result["bank_matches"],
+        batch_result["bank_reasons"], batch_result["receiver_owner_names"],
+        batch_result["receiver_candidates"], batch_result["receiver_bank_labels"],
+    )
     # ทุกใบต้องชี้ได้ชัด ถึงจะยอมให้ปฏิเสธอัตโนมัติเรื่องบัญชี
     bank_resolved = all(batch_result["bank_resolved"]) if batch_result["bank_resolved"] else False
 
@@ -1201,6 +1313,8 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         if api_success:
             # ทุกสลิปเข้าบัญชีเดียวกัน -> ใช้บัญชีนั้นได้เลย ไม่ต้องถามแอดมินซ้ำ
             txn.receiver_account = unique_receiver_account(batch_result["receivers"]) or receiver_names_str
+            # เก็บเหตุผลไว้ด้วย ไม่งั้น /recheck จะเดาใหม่แล้วเล่าคนละเรื่องกับตอนแรก
+            txn.receiver_note = clamp("" if bank_matches else account_problem_text, RECEIVER_NOTE_MAX)
 
         if verification_decision == VerificationDecision.AUTO_RECEIVE:
             txn.status = "Receive"
@@ -1232,17 +1346,16 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
                 "✅ Auto-Received: Batch=%s | Receiver(s): %s | Account: %s | Amount: %s",
                 batch_id[:15], receiver_names_str, receiver_account or "-", verified_total_amount,
             )
-            await bot.send_message(
-                chat_id=chat_id,
-                reply_to_message_id=msg_id,
+            await finish_message(
+                bot, notice, chat_id, msg_id,
+                f"✅ Received automatically\n\n"
+                f"ID: {reported['id']}\n"
+                f"Sender: {sender_names_str or '-'}\n"
+                f"Account: {receiver_account or '-'}\n"
+                f"Amount: {format_thb(verified_total_amount)}\n\n"
+                "Saved to today's sheet."
+                + source_link_line(chat_id, msg_id, include_source_link),
                 message_thread_id=message_thread_id,
-                text=(f"✅ Received automatically\n\n"
-                      f"ID: {reported['id']}\n"
-                      f"Sender: {sender_names_str or '-'}\n"
-                      f"Account: {receiver_account or '-'}\n"
-                      f"Amount: {format_thb(verified_total_amount)}\n\n"
-                      f"Saved to today's sheet."
-                      + source_link_line(chat_id, msg_id, include_source_link)),
             )
         else:
             await send_manual_review_message(
@@ -1263,10 +1376,7 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
     if verification_decision == VerificationDecision.AUTO_REJECT:
         reject_reasons = []
         if not bank_matches:
-            reject_reasons.append(
-                "• Receiver account: "
-                + build_bank_mismatch_reason(batch_result["bank_codes"], batch_result["bank_matches"])
-            )
+            reject_reasons.append("• Receiver account: " + account_problem_text)
         if not amount_match:
             reject_reasons.append(
                 f"• Amount: the slip says {format_thb(verified_total_amount)}, "
@@ -1277,15 +1387,23 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
             "❌ Auto-Rejected: Batch=%s | reasons=%s",
             batch_id[:15], " / ".join(reject_reasons) or "unknown",
         )
-        await bot.send_message(
-            chat_id=chat_id,
-            reply_to_message_id=msg_id,
+        # ยอดขาดไปทั้งที่บัญชีผู้รับถูก = ลายเซ็นของ "มีสลิปในรูปที่ระบบมองไม่เห็น"
+        # (รูปเดียวมี QR สองดวง แต่อ่านออกดวงเดียว) ให้กดเติม QR ต่อได้ทันที
+        # ไม่ต้องพิมพ์ /recheck ก่อน เพราะตอนถูกปฏิเสธคือตอนที่คนกำลังมองอยู่พอดี
+        missing_slip_likely = not amount_match and bank_matches
+        await finish_message(
+            bot, notice, chat_id, msg_id,
+            "❌ Rejected automatically\n\n"
+            + ("\n".join(reject_reasons)
+               or "• The slip details do not match this chat")
+            + ("\n\nIf the picture holds another slip the bot could not read, "
+               "press the button below."
+               if missing_slip_likely else
+               "\n\nNothing was saved to the sheet. "
+               "Correct the details and send the slip again.")
+            + source_link_line(chat_id, msg_id, include_source_link),
+            reply_markup=get_add_qr_keyboard(batch_id) if missing_slip_likely else None,
             message_thread_id=message_thread_id,
-            text=("❌ Rejected automatically\n\n"
-                  + ("\n".join(reject_reasons) or "• The slip details do not match this chat")
-                  + "\n\nNothing was saved to the sheet. "
-                    "Correct the details and send the slip again."
-                  + source_link_line(chat_id, msg_id, include_source_link)),
         )
         return
 
@@ -1305,6 +1423,32 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
         )
     if body_lines:
         body_lines.append("")
+
+    # ตรวจกับธนาคารไม่สำเร็จ = ไม่มีข้อมูลฝั่งสลิปมาเทียบเลย ผลตรวจจะติดทั้ง 3 ข้อ
+    # โดยอัตโนมัติและขึ้นว่า "(not given)" ทุกบรรทัด ซึ่งไม่ได้บอกอะไรนอกจากทำให้รก
+    # แสดงแค่สิ่งที่แชทแจ้งมาก็พอ คนตัดสินจะได้โฟกัสที่ข้อมูลที่มีจริง
+    if not api_success:
+        body_lines.append(describe_reported_line(reported))
+        still_pending = batch_result["error_type"] == "SLIP_PENDING"
+        footer_message = (
+            "The bank has not confirmed it yet. Press Check again in a minute — "
+            "or Reject if the slip is wrong."
+            if still_pending else
+            "Verification is unavailable. Press Check again, or decide from the "
+            "details above."
+        )
+        await send_manual_review_message(
+            bot, chat_id, msg_id, batch_id, body_lines,
+            footer_message + source_link_line(chat_id, msg_id, include_source_link),
+            with_receive=not still_pending,
+            with_retry=True,
+            # ตรวจกับธนาคารไม่สำเร็จ = ปัญหาไม่ได้อยู่ที่ QR ขาด แต่อยู่ที่ยังตรวจไม่ได้
+            # ปุ่มเติม QR ตรงนี้จึงชวนให้เข้าใจผิดว่าต้องหา QR มาเพิ่ม ทั้งที่ต้องรออย่างเดียว
+            with_add_qr=False,
+            message_thread_id=message_thread_id,
+            notice=notice,
+        )
+        return
 
     body_lines.extend(format_check_results([
         {
@@ -1326,13 +1470,11 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
                     if expected_amount is not None else "(not given)",
         },
         {
-            "title": "Receiver account is not ours",
+            "title": account_check_title(batch_result["bank_reasons"]),
             "short": "Account",
             "passed": bank_matches,
             "value": receiver_names_str or "-",
-            "reason": build_bank_mismatch_reason(
-                batch_result["bank_codes"], batch_result["bank_matches"]
-            ),
+            "reason": account_problem_text,
         },
     ]))
 
@@ -1344,24 +1486,13 @@ async def process_slip_group(bot, chat_id, msg_id, caption: str, qr_list: list[s
     else:
         footer_message = "Choose Receive to save it to today's sheet, or Reject to discard it."
 
-    # ธนาคารยังยืนยันไม่เสร็จ = เรื่องชั่วคราวที่หายเองใน 1-2 นาที
-    # ซ่อน Receive ไว้ เพราะกดรับตอนนี้คือรับโดยไม่มีใครตรวจกับธนาคารเลย
-    still_pending = batch_result["error_type"] == "SLIP_PENDING"
-    if not api_success:
-        footer_message = (
-            "The bank has not confirmed it yet. Press Check again in a minute — "
-            "or Reject if the slip is wrong."
-            if still_pending else
-            "Verification is unavailable. Press Check again, or decide from the "
-            "details above."
-        )
-
+    # มาถึงตรงนี้แปลว่าตรวจกับธนาคารสำเร็จแล้ว (เคสที่ไม่สำเร็จออกไปตั้งแต่ข้างบน)
+    # จึงมีข้อมูลครบพอให้กดรับได้ และไม่ต้องมีปุ่มตรวจซ้ำ
     await send_manual_review_message(
         bot, chat_id, msg_id, batch_id, body_lines,
         footer_message + source_link_line(chat_id, msg_id, include_source_link),
-        with_receive=not still_pending,
-        with_retry=not api_success,
         message_thread_id=message_thread_id,
+        notice=notice,
     )
 
 
@@ -1446,7 +1577,8 @@ async def handle_amount_reply(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = message.from_user
     if user is None or str(user.id) != request["user_id"]:
         # คนอื่นตอบแทนไม่ได้ แต่กด Receive เองเพื่อขอยอดของตัวเองได้
-        await message.reply_text(
+        await notice_and_expire(
+            message,
             "This amount was requested from someone else. "
             "Press Receive on the slip to enter it yourself."
         )
@@ -1454,7 +1586,8 @@ async def handle_amount_reply(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     amount = parse_typed_amount(message.text)
     if amount is None:
-        await message.reply_text(
+        await complain_on_request(
+            message,
             "⚠️ That is not a valid amount\n\n"
             "Reply again with a number greater than zero (for example: 1500)."
         )
@@ -1490,8 +1623,8 @@ async def handle_amount_reply(update: Update, context: ContextTypes.DEFAULT_TYPE
     # สลิปที่ต้องพิมพ์ยอดเอง มักเป็นสลิปที่อ่านอะไรไม่ได้เลย เวลาโอนก็มักไม่รู้ด้วย
     # ถามต่อเลยตรงนี้ ดีกว่าปล่อยให้ไปกดเลือกธนาคารแล้วค่อยเด้งถาม จนต้องกดธนาคารซ้ำ
     if time_still_unknown:
-        await message.reply_text(f"Amount set to {format_thb(amount)}")
-        await ask_for_transfer_time(message, user, batch_id)
+        await ask_for_transfer_time(
+            message, user, batch_id, lead=f"Amount set to {format_thb(amount)}")
         return
 
     await message.reply_text(
@@ -1596,7 +1729,24 @@ def find_time_request(chat_id, question_msg_id) -> dict | None:
     return request
 
 
-async def ask_for_transfer_time(message, user, batch_id: str) -> None:
+async def complain_on_request(message, text: str) -> None:
+    """บอกว่าตอบมาไม่ถูกรูปแบบ โดยแก้ทับ "ข้อความคำขอ" เดิม ไม่ใช่ส่งใหม่
+
+    ถ้าส่งเป็นข้อความใหม่ คนมักตอบกลับข้อความ error นั้นแทน ซึ่งไม่ใช่เป้าที่ระบบรออยู่
+    แล้วคำตอบรอบสองจะเงียบหายไปเฉยๆ (เจอมาแล้วจากการใช้จริง)
+    แก้ทับข้อความเดิมจึงเหลือเป้าให้ตอบกลับเป้าเดียวเสมอ
+    """
+    request_message = getattr(message, "reply_to_message", None)
+    if request_message is not None:
+        try:
+            await request_message.edit_text(text)
+            return
+        except Exception as exc:
+            logger.info("Could not edit the request message | error=%s", exc)
+    await message.reply_text(text)
+
+
+async def ask_for_transfer_time(message, user, batch_id: str, anchor=None, lead: str = "") -> None:
     """สลิปที่อ่านเวลาโอนไม่ได้ ให้แอดมินพิมพ์เวลาจากหน้าสลิปเอง
 
     รับ message ตรงๆ ไม่รับ query เพราะถูกเรียกได้ทั้งจากการกดปุ่ม
@@ -1604,14 +1754,26 @@ async def ask_for_transfer_time(message, user, batch_id: str) -> None:
 
     ยังไม่จองสถานะเหมือนตอนถามยอด ถ้าเขาไม่ตอบ สลิปจะได้ไม่ค้างเป็น Receive ตลอดไป
     """
-    question = await message.reply_text(
-        "🕒 Transfer time needed\n\n"
-        f"{describe_user(user)}, the time on this slip could not be read.\n\n"
-        "Reply to this message with the date and time shown on the slip.\n"
-        "For example: 8/8/69 0:18\n"
-        "More than one slip in the picture? Add every time, separated by a comma "
-        "(for example: 8/8/69 0:18, 0:37).",
+    # บรรทัดนำ (เช่น "Amount set to 1500") ต้องอยู่ในข้อความเดียวกับคำถาม
+    # ถ้าแยกเป็นสองข้อความ อันแรกจะค้างในกลุ่มตลอดไปเพราะไม่มีอะไรมาแก้ทับ
+    text = (
+        (lead + "\n\n" if lead else "")
+        + "🕒 Date and time needed\n"
+        "↪️ Reply to THIS message — e.g. 8/8/69 0:18\n"
+        "Several slips: 8/8/69 0:18, 0:37"
     )
+
+    # แก้ข้อความเดิมถ้ามี จะได้เหลือข้อความเดียวต่อสลิปหนึ่งใบ
+    # คนตอบกลับข้อความเดิมได้เหมือนกัน เพราะเลขข้อความไม่เปลี่ยนตอนแก้
+    question = None
+    if anchor is not None:
+        try:
+            question = await anchor.edit_text(text, reply_markup=None)
+        except Exception as exc:
+            logger.info("Could not edit into the time request | error=%s", exc)
+    if question is None:
+        question = await message.reply_text(text)
+
     remember_time_request(message.chat_id, question.message_id, batch_id, user.id)
     logger.info(
         "Asked for a manual transfer time | batch_id=%s | user=%s",
@@ -1628,7 +1790,8 @@ async def handle_time_reply(message) -> bool:
     key = _amount_request_key(message.chat_id, message.reply_to_message.message_id)
     user = message.from_user
     if user is None or str(user.id) != request["user_id"]:
-        await message.reply_text(
+        await notice_and_expire(
+            message,
             "This time was requested from someone else. "
             "Press Receive on the slip to enter it yourself."
         )
@@ -1638,9 +1801,11 @@ async def handle_time_reply(message) -> bool:
     # ต้องมีวันที่เสมอ ไม่ใช่แค่เวลา — ถ้าไม่มีวัน transfer_at จะเป็นค่าว่าง
     # แล้วด่านเตือนสลิปซ้ำระดับนาทีจะไม่ทำงานโดยไม่มีอะไรบอก
     if times is None or transfer_date is None:
-        await message.reply_text(
+        await complain_on_request(
+            message,
             "⚠️ That is not a valid date and time\n\n"
-            "Reply again like this: 8/8/69 0:18\n"
+            "ตอบกลับข้อความนี้ — reply to THIS message again\n\n"
+            "Like this: 8/8/69 0:18\n"
             "Several slips in one picture: 8/8/69 0:18, 0:37"
         )
         return True
@@ -1668,6 +1833,13 @@ async def handle_time_reply(message) -> bool:
         add_audit_log(db, txn.batch_id, "transfer_time_entered_manually", actor=describe_actor(user))
         db.commit()
         batch_id = txn.batch_id
+        # ใบที่รอ QR อยู่ = มาจากปุ่ม "QR เสียจริง" ซึ่งขอเวลาก่อนเป็นอย่างแรก
+        # กรอกเวลาเสร็จแล้วค่อยเอาข้อมูลทั้งชุดไปตรวจทีเดียว จะได้ไม่มีสองข้อความพร้อมกัน
+        unreadable_slip = str(txn.status).lower() == NEEDS_QR_STATUS
+        waiting_row = {
+            "batch_id": txn.batch_id, "chat_id": txn.chat_id, "msg_id": txn.msg_id,
+            "caption": txn.raw_caption or "", "photo_hash": txn.photo_hash,
+        }
 
     _time_requests.pop(key, None)
     logger.info(
@@ -1675,8 +1847,24 @@ async def handle_time_reply(message) -> bool:
         batch_id, times, describe_actor(user),
     )
 
-    warning = describe_same_minute_duplicates(batch_id)
     stamp = times if transfer_date is None else f"{transfer_date:%d/%m/%Y} {times}"
+
+    if unreadable_slip:
+        # ผลตรวจไปแก้ข้อความเดิม (ข้อความที่เขาเพิ่งตอบกลับมา) จึงเหลือข้อความเดียวทั้งใบ
+        logger.info("Transfer time filled in, checking the whole slip | batch_id=%s | time=%s",
+                    batch_id, stamp)
+        await process_slip_group(
+            message.get_bot(), waiting_row["chat_id"], waiting_row["msg_id"],
+            waiting_row["caption"], [], photo_count=1,
+            photo_hashes=[waiting_row["photo_hash"]], allow_without_qr=True,
+            force_batch_id=waiting_row["batch_id"],
+            message_thread_id=getattr(message, "message_thread_id", None),
+            include_source_link=True,
+            notice=message.reply_to_message,
+        )
+        return True
+
+    warning = describe_same_minute_duplicates(batch_id)
     await message.reply_text(
         f"Transfer time set to {stamp}\n\n"
         + warning +
@@ -1894,6 +2082,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.bot, waiting["chat_id"], waiting["msg_id"], waiting["caption"],
                 known, photo_count=1, photo_hashes=[waiting["photo_hash"]],
                 force_batch_id=waiting["batch_id"],
+                message_thread_id=getattr(query.message, "message_thread_id", None),
+                include_source_link=True,
+                # แก้ข้อความที่ปุ่มติดอยู่ ไม่ใช่โพสต์ผลใหม่ซ้อนของเดิม
+                notice=query.message,
             )
             return
         if callback_data.startswith("addqr_"):
@@ -1919,14 +2111,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             batch_id, chat_id_of_slip = txn.batch_id, txn.chat_id
 
             await query.answer("Send the QR of the slip that was missed")
-            await query.edit_message_reply_markup(reply_markup=None)
-            question = await query.message.reply_text(
-                "➕ Add another QR\n\n"
-                f"{describe_user(user)}, reply to THIS message with the QR of the slip "
-                "that was missed — a picture of just the QR, or the code as text.\n\n"
-                "Everything already read stays; the new one is added to it and the whole "
-                "set is checked again.",
-            )
+            # แก้ข้อความเดิมแทนการส่งใหม่ จะได้เหลือข้อความเดียวต่อสลิปหนึ่งใบ
+            # เลขข้อความไม่เปลี่ยนตอนแก้ คนจึงตอบกลับข้อความนี้ได้ตามปกติ
+            question = query.message
+            try:
+                question = await query.edit_message_text(
+                    text=("➕ Add another QR\n"
+                          "↪️ Reply to THIS message with the QR that was missed\n"
+                          "A picture of just the QR, or the code as text\n\n"
+                          "What was already read stays — the whole set is checked again."),
+                    reply_markup=None,
+                )
+            except Exception as exc:
+                logger.info("Could not edit into the add-QR request | error=%s", exc)
             with SessionLocal() as fresh:
                 waiting = fresh.query(Transaction).filter(
                     Transaction.batch_id == batch_id).first()
@@ -1984,21 +2181,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ยกเว้นการตรวจกับธนาคารเป็นเรื่องใหญ่ ต้องรู้ว่าใครเป็นคนตัดสินใจ
             add_audit_log(db, txn.batch_id, "qr_declared_unreadable",
                           actor=describe_actor(user))
+            # เลิกรอ QR ตรงนี้เลย ไม่งั้นข้อความเดิม (ที่กำลังจะกลายเป็นคำขอวันเวลา)
+            # จะยังนับเป็นคำขอ QR อยู่ แล้ววันเวลาที่พิมพ์ตอบมาจะโดนตีว่า "ไม่ใช่ QR"
+            txn.qr_request_msg_id = None
             db.commit()
 
             await query.answer("Recorded — this slip will be checked by hand")
             await query.edit_message_reply_markup(reply_markup=None)
             logger.info("QR declared unreadable | batch_id=%s | by=%s",
                         txn.batch_id, describe_actor(user))
-            # ปล่อย connection คืน pool ก่อนงานยาว — ตรวจกับ EasySlip อาจกิน
-            # เกิน 10 วินาที (มีการลองซ้ำ) แล้วยังต่อด้วยการเขียนชีท
-            # ถ้าถือ connection ไว้ทั้งช่วงนั้น หลายคนกดพร้อมกันจะดูด pool จนหมด
             db.close()
-            await process_slip_group(
-                context.bot, waiting["chat_id"], waiting["msg_id"], waiting["caption"],
-                [], photo_count=1, photo_hashes=[waiting["photo_hash"]],
-                allow_without_qr=True,
-            )
+
+            # ขอวันและเวลาก่อน แล้วค่อยเอาข้อมูลทั้งชุดไปตรวจทีเดียว
+            # ไม่งั้นผลตรวจกับคำขอเวลาจะโผล่มาพร้อมกัน จนไม่รู้ว่าต้องทำอะไรก่อน
+            # แก้ข้อความ "ขอ QR" ที่ปุ่มติดอยู่ ให้กลายเป็นคำขอวันเวลาแทน
+            await ask_for_transfer_time(query.message, user, waiting["batch_id"],
+                                        anchor=query.message)
             return
 
         if callback_data.startswith("bank_"):

@@ -11,9 +11,6 @@ DB_PATH = os.path.join(tempfile.mkdtemp(), "gate.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_PATH}"
 os.environ["VIP_WE_CHAT_ID"] = "-100111"
 os.environ["VIP_12_CHAT_ID"] = "-100222"
-# .env ของเครื่องอาจตั้งหัวข้อไว้ ซึ่งจะทำให้รูปในเทสต์ถูกกรองทิ้งทั้งหมด
-os.environ["VIP_WE_TOPIC_ID"] = ""
-os.environ["VIP_12_TOPIC_ID"] = ""
 os.environ["SLIP_APPROVER_IDS"] = "111"
 
 for module_name in [
@@ -120,8 +117,8 @@ async def main():
 
     print("\n=== ไม่มี QR + ไม่มียอด -> ปฏิเสธอัตโนมัติ ===")
     check("ทวง QR", "🔍 QR code needed" in bot.last["text"], True)
-    check("  บอกเหตุผลว่าอ่าน QR ไม่ได้", "No QR code could be read" in bot.last["text"], True)
-    check("  บอกวิธีส่ง QR แบบรูป", "picture of just the QR code" in bot.last["text"], True)
+    check("  บอกเหตุผลว่าอ่าน QR ไม่ได้", "QR code needed" in bot.last["text"], True)
+    check("  บอกวิธีส่ง QR แบบรูป", "just the QR" in bot.last["text"], True)
     check("  บอกเว็บที่ใช้อ่าน QR", "qrcodescan.in" in bot.last["text"], True)
     check("  มีปุ่มเผื่อ QR เสียจริง", bot.last["keyboard"] is not None, True)
 
@@ -141,15 +138,20 @@ async def main():
 
     print("\n=== อัลบั้ม: caption อยู่ใบเดียว ใบอื่นต้องไม่ถูกตัดทิ้ง ===")
     downloads.clear()
-    h.MEDIA_GROUP_WAIT_SECONDS = 0.05
+    # ตั้งสั้นแต่ต้องเผื่อระยะให้พอ ไม่งั้นรูปที่ 2 ของอัลบั้มมาไม่ทัน deadline ของรูปแรก
+    # (เคยตั้งไว้ 0.05 จนรูปที่ 2 บางทีมาไม่ทัน กลุ่มเลยถูก flush ไปก่อนเป็นคนละชุด)
+    h.MEDIA_GROUP_WAIT_SECONDS = 0.3
     await send_photo(20, CAP_WITH_AMOUNT, qr=["QR_A"], media_group_id="G1")
     await send_photo(21, "", qr=["QR_B"], media_group_id="G1")
     check("โหลดครบทุกใบ แม้ใบที่ไม่มี caption", sorted(downloads), [20, 21])
 
     collected = []
     real = h.process_slip_group
-    h.process_slip_group = lambda *a, **kw: collected.append(a) or asyncio.sleep(0)
-    await asyncio.sleep(0.3)
+    # ต้องรับ **k ด้วย เพราะ flush_media_group เรียกด้วย message_thread_id=/
+    # include_source_link= เป็นคีย์เวิร์ด ไม่ใช่ตำแหน่ง — ถ้าไม่รับจะโดน TypeError
+    # แล้วถูก except Exception ของ flush_media_group กลืนไปเงียบๆ (เจอมาแล้วจากการดีบั๊ก)
+    h.process_slip_group = lambda *a, **k: collected.append(a) or asyncio.sleep(0)
+    await asyncio.sleep(0.6)
     check("  ประมวลผลเป็นชุดเดียว", len(collected), 1)
     check("  ได้ QR ครบทั้ง 2 ใบ", collected[0][4], ["QR_A", "QR_B"])
     check("  ใช้ caption จากใบที่มี", "benz4455" in collected[0][3], True)

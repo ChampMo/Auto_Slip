@@ -3,7 +3,7 @@ from services.easyslip import BANK_DROPDOWN_VALUES
 
 
 def get_approval_keyboard(batch_id: str, with_duplicate: bool = False,
-                          with_add_qr: bool = True, with_receive: bool = True,
+                          with_add_qr: bool = False, with_receive: bool = True,
                           with_retry: bool = False):
     # ใช้ batch_id เป็นตัวอ้างอิงแทน
     short_ref = batch_id[:40] if len(batch_id) > 40 else batch_id
@@ -27,8 +27,8 @@ def get_approval_keyboard(batch_id: str, with_duplicate: bool = False,
             InlineKeyboardButton("♻️ Duplicate — already recorded",
                                  callback_data=f"dup_{short_ref}")
         ])
-    # บางทีในรูปมี QR มากกว่าที่ระบบอ่านเจอ ซึ่งไม่มีทางตรวจจับได้เอง
-    # จึงต้องมีทางให้คนบอกระบบว่า "ยังมีอีกใบ" แทนที่จะต้องส่งสลิปเข้ามาใหม่ทั้งชุด
+    # ปิดไว้เป็นค่าเริ่มต้น — ปุ่มค้างอยู่ทำให้ดูเหมือนงานยังไม่จบ
+    # ถ้าในรูปมี QR ที่ระบบอ่านไม่เจอ ให้ใช้ /recheck เรียกปุ่มกลับมาแทน
     if with_add_qr:
         keyboard.append([
             InlineKeyboardButton("➕ Add another QR",

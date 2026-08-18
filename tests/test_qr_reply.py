@@ -82,7 +82,7 @@ async def send(message, qr_list):
     h.download_and_scan_photo = lambda m: asyncio.sleep(0, result=(qr_list, "hash1"))
 
     async def fake_group(bot, chat_id, msg_id, caption, qr, photo_count,
-                         photo_hashes=None, allow_without_qr=False, force_batch_id=None):
+                         photo_hashes=None, allow_without_qr=False, force_batch_id=None, **kw):
         resumed.append({"caption": caption, "qr": qr, "batch": force_batch_id})
 
     h.process_slip_group = fake_group

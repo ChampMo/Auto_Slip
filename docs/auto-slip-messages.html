@@ -699,7 +699,7 @@
       พิมพ์คำที่เห็นบนหน้าจอลงในช่องค้นหาได้เลย ไม่ต้องพิมพ์ให้ครบทั้งประโยค
     </p>
     <div class="masthead-meta">
-      <span><b>เวอร์ชัน</b> 1.7.0 (2026-08-10)</span>
+      <span><b>เวอร์ชัน</b> 1.9.0 (2026-08-10)</span>
       <span><b>โปรเจกต์</b> Deposit Check</span>
       <span><b>ใช้คู่กับ</b> คู่มือใช้งานระบบ</span>
       <span><b>ค้นหา</b> กด / เพื่อไปที่ช่องค้นหา</span>
@@ -910,6 +910,25 @@
       <dl class="row"><dt>ต้องทำอะไร</dt><dd>พิมพ์ <code>/pending</code> ดูรายการแล้วเคลียร์ให้จบก่อน 23:00</dd></dl>
     </div>
 
+    <div class="msg" data-tone="info">
+      <p class="bubble">🔎 Checking this slip with the bank...</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>บอทเห็นสลิปแล้วและกำลังตรวจอยู่ ขึ้นทันทีก่อนเริ่มตรวจ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd><b>รอสักครู่ อย่าส่งสลิปซ้ำ</b> ข้อความนี้จะเปลี่ยนเป็นผลตรวจเองเมื่อเสร็จ ปกติไม่ถึงวินาที แต่ถ้าธนาคารยังไม่พร้อมบอทจะลองซ้ำให้ นานได้ถึงราว 12 วินาที</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">⏳ This message disappears in 1 minute</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ต่อท้ายผลของคำสั่งอ่านค่า (<code>/status</code> <code>/pending</code> <code>/today</code> <code>/health</code> <code>/approvers</code> <code>/myid</code>) เมื่อใช้ในกลุ่ม</dd></dl>
+      <dl class="row"><dt>ทำไมต้องลบ</dt><dd>ผลลัพธ์เก่าที่ค้างอยู่ทำให้เข้าใจผิดว่าเป็นสถานะปัจจุบัน และทำให้กลุ่มรกจนหาสลิปยาก — ในแชทส่วนตัวไม่ลบ</dd></dl>
+      <dl class="row"><dt>ต้องทำอะไร</dt><dd>อ่านไม่ทันก็พิมพ์คำสั่งใหม่ได้เลย ข้อมูลไม่ได้หายไปไหน</dd></dl>
+    </div>
+
+    <div class="msg" data-tone="info">
+      <p class="bubble">♻️ Buttons sent again</p>
+      <dl class="row"><dt>หมายถึง</dt><dd>ใช้ <code>/recheck</code> กับใบที่ยังรอตัดสิน บอทส่งปุ่มชุดใหม่มาให้ และปิดปุ่มชุดเก่าทิ้ง</dd></dl>
+      <dl class="row"><dt>ใช้ตอนไหน</dt><dd>เมื่อข้อความที่มีปุ่ม<b>ถูกลบไปแล้ว</b> หรือหาไม่เจอในกลุ่มที่คุยกันเยอะ ต่างจาก "Sent back for checking" ที่ใช้กับใบที่จบไปแล้ว</dd></dl>
+    </div>
+
     <div class="msg" data-tone="bad">
       <p class="bubble">You are not allowed to approve slips</p>
       <dl class="row"><dt>หมายถึง</dt><dd>คนที่กดไม่ได้อยู่ในรายชื่อผู้อนุมัติ การเป็นแอดมินของกลุ่มไม่ได้ทำให้กดได้</dd></dl>
@@ -1009,7 +1028,7 @@
     </div>
   </section>
 
-      <footer>Auto Slip 1.7.0 · เอกสารนี้อธิบายเฉพาะข้อความที่บอทตอบ · ขั้นตอนการทำงานทั้งหมดอยู่ในคู่มือใช้งานระบบ</footer>
+      <footer>Auto Slip 1.9.0 · เอกสารนี้อธิบายเฉพาะข้อความที่บอทตอบ · ขั้นตอนการทำงานทั้งหมดอยู่ในคู่มือใช้งานระบบ</footer>
     </main>
   </div>
 </div>

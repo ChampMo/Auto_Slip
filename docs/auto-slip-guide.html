@@ -666,7 +666,7 @@
       โดยไม่ต้องมีคนพิมพ์เอง — เหลือให้คนตัดสินเฉพาะรายการที่ระบบไม่กล้าตัดสินแทน
     </p>
     <div class="masthead-meta">
-      <span data-en="<b>Version</b> 1.7.0 (2026-08-10)"><b>เวอร์ชัน</b> 1.7.0 (2026-08-10)</span>
+      <span data-en="<b>Version</b> 1.9.0 (2026-08-10)"><b>เวอร์ชัน</b> 1.9.0 (2026-08-10)</span>
       <span data-en="<b>Project</b> Deposit Check"><b>โปรเจกต์</b> Deposit Check</span>
       <span data-en="<b>Groups</b> VIP_WE · VIP_12"><b>กลุ่มที่รองรับ</b> VIP_WE · VIP_12</span>
       <span data-en="<b>Destination</b> Google Sheets"><b>ปลายทาง</b> Google Sheets</span>
@@ -1161,7 +1161,7 @@ Choose Receive to save it to today's sheet, or Reject to discard it.
             <thead><tr><th style="width:1%" data-en="Command">คำสั่ง</th><th data-en="Purpose">ใช้ทำอะไร</th></tr></thead>
             <tbody>
               <tr><td><code>/pending</code></td><td data-en="Slips still waiting for a decision, with links that jump to the message">สลิปที่ยังรอการตัดสิน พร้อมลิงก์กระโดดไปที่ข้อความนั้น</td></tr>
-              <tr><td><code>/recheck</code></td><td data-en="Send a rejected slip back to be decided again — reply to the slip photo. Used when the system rejected it by mistake. It does not verify with the bank again; it just brings the buttons back. A slip already saved to the sheet cannot be sent back.">ส่งสลิปที่ถูกปฏิเสธกลับมาตัดสินใหม่ — reply ที่รูปสลิป ใช้ตอนระบบปฏิเสธผิด ไม่ได้ไปตรวจกับธนาคารซ้ำ แค่เอาปุ่มกลับมาให้กด ใบที่บันทึกลงชีทไปแล้วส่งกลับไม่ได้</td></tr>
+              <tr><td><code>/recheck</code></td><td data-en="Send a rejected slip back to be decided again — reply to the slip photo. Also brings a fresh set of buttons if the message holding them was deleted. Used when the system rejected it by mistake. It does not verify with the bank again; it just brings the buttons back. A slip already saved to the sheet cannot be sent back.">ส่งสลิปที่ถูกปฏิเสธกลับมาตัดสินใหม่ — reply ที่รูปสลิป ใช้ตอนระบบปฏิเสธผิด และใช้เรียกปุ่มชุดใหม่ได้ด้วยถ้าข้อความที่มีปุ่มถูกลบไป ไม่ได้ไปตรวจกับธนาคารซ้ำ แค่เอาปุ่มกลับมาให้กด ใบที่บันทึกลงชีทไปแล้วส่งกลับไม่ได้</td></tr>
               <tr><td><code>/today</code></td><td data-en="Today's totals — how many accepted, rejected, still waiting, and the total amount">ยอดรวมของวันนี้ — รับกี่ใบ ปฏิเสธกี่ใบ ค้างกี่ใบ รวมเงินเท่าไหร่</td></tr>
               <tr><td><code>/health</code></td><td data-en="System check — database, this month's sheet, next month's sheet, and the scheduled jobs">ตรวจสุขภาพระบบ — ฐานข้อมูล ไฟล์ชีทเดือนนี้ ไฟล์เดือนหน้า และงานที่ตั้งเวลาไว้</td></tr>
               <tr><td><code>/approvers</code></td><td data-en="See who can approve slips">ดูรายชื่อคนที่กดปุ่มได้</td></tr>
@@ -1392,6 +1392,22 @@ Choose Receive to save it to today's sheet, or Reject to discard it.
           รายการนี้ถูกใช้ทั้งตอนตรวจอัตโนมัติและตอนขึ้นปุ่มให้เลือกบัญชี
         </p>
       </section>
+
+        <div class="callout">
+          <h3>ผลของคำสั่งอ่านค่าจะหายไปเองใน 1 นาที</h3>
+          <p>
+            <code>/status</code> <code>/pending</code> <code>/today</code> <code>/health</code>
+            <code>/approvers</code> <code>/myid</code> เมื่อใช้<b>ในกลุ่ม</b> จะลบตัวเองทิ้งใน 1 นาที
+            พร้อมลบคำสั่งของผู้ใช้ด้วย (ถ้าบอทเป็นแอดมิน) — กันไม่ให้ผลลัพธ์เก่าค้างอยู่แล้วมีคน
+            เลื่อนมาเจอทีหลังนึกว่าเป็นสถานะปัจจุบัน อ่านไม่ทันก็พิมพ์ใหม่ได้ ข้อมูลไม่ได้หายไปไหน
+            ในแชทส่วนตัวไม่ลบ
+          </p>
+          <p class="note">
+            <code>/pending</code> กับ <code>/today</code> ใช้ขอบเขตเดียวกัน — ใช้ในกลุ่มที่ลงทะเบียน
+            จะเห็นเฉพาะกลุ่มนั้น ใช้นอกกลุ่มจะเห็นทุกกลุ่ม
+          </p>
+        </div>
+
 
       <section id="relay">
         <h2><span class="n">เพิ่มเติม</span>สลิปที่บอทตัวอื่นโพสต์</h2>

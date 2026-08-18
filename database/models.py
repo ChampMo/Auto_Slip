@@ -16,6 +16,7 @@ WARNING_MAX = 600       # ข้อความเตือนมีบรรท
 ACTION_MAX = 200
 TRANSFER_TIME_MAX = 120  # "0:18, 0:37, ..." — พอสำหรับสลิปหลายใบในรูปเดียว
 QR_REF_MAX = 512        # QR แบบ EMV ยาวได้ถึงราวๆ นี้
+RECEIVER_NOTE_MAX = 255  # เหตุผลของด่านบัญชีผู้รับ เขียนให้คนอ่านเข้าใจในบรรทัดเดียว
 
 # ห้ามตัดให้สั้นลงเด็ดขาด เพราะ QR สองใบที่ขึ้นต้นเหมือนกันจะกลายเป็นใบเดียวกัน
 # แล้วด่านกันสลิปซ้ำจะปฏิเสธสลิปที่ถูกต้อง
@@ -62,6 +63,9 @@ class Transaction(Base):
     sender_names = Column(String(NAMES_LIST_MAX), nullable=True) # ชื่อคนโอนทุกคนรวมกัน
     receiver_names = Column(String(NAMES_LIST_MAX), nullable=True) # ชื่อ/บัญชีผู้รับทุกใบรวมกัน
     receiver_account = Column(String(255), nullable=True)
+    # เหตุผลของด่านบัญชีผู้รับตอนตรวจครั้งแรก เก็บไว้ให้ /recheck และ /status
+    # เล่าเรื่องเดียวกับที่บอทตอบในกลุ่ม ไม่ใช่เดาใหม่จากค่าที่เหลืออยู่
+    receiver_note = Column(String(RECEIVER_NOTE_MAX), nullable=True)
 
     # ── เวลาที่โอนเงินจริงตามสลิป (คนละอย่างกับ created_at ที่เป็นเวลาที่บอทได้รับรูป) ──
     # transfer_at      = เวลาโอนของใบแรกในชุด เก็บเป็น UTC แบบไม่มี tzinfo เหมือน created_at

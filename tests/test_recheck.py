@@ -197,8 +197,10 @@ async def main():
     print("\n=== 6. ใบที่ยังรออยู่ ไม่ต้องเปิด ===")
     make_slip("r4", 503, "pending", chat_trans_id="0000126")
     msg = await run_recheck(ADMIN, reply_to_id=503)
-    check("บอกว่ายังไม่จบ", "not finished yet" in text_of(msg.last), True)
-    check("  สถานะไม่เปลี่ยน", slip("r4").status, "pending")
+    # ข้อความที่มีปุ่มถูกลบได้ ถ้าไม่ให้เรียกใหม่ ใบนั้นจะไม่มีทางไปต่อเลย
+    check("เรียกปุ่มชุดใหม่ได้", "♻️ Buttons sent again" in text_of(msg.last), True)
+    check("  มีปุ่มมาให้กด", msg.last.keyboard is not None, True)
+    check("  สถานะยังเป็นรอตัดสิน", slip("r4").status, "pending")
 
     print("\n=== 7. ใบที่ค้างจากบอทดับ เปิดได้ ===")
     make_slip("r5", 504, "interrupted", chat_trans_id="0000127")

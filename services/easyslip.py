@@ -49,12 +49,235 @@ COMPANY_ACCOUNTS = {
     "SCB-MT20234": "284-252-0234",      # 17
     "KB-CP37446":  "227-293-7446",      # 18
     "KB-CP05761":  "234-850-5761",      # 19
+    "GSB-Mon":     "020-324-245-305",   # 20
+    "BAY-Mon":     "450-185-7393",      # 21
 }
 
 BANK_DROPDOWN_VALUES = sorted(COMPANY_ACCOUNTS)
 
 # ตัวอักษรที่ธนาคาร/EasySlip ใช้ปิดบังหลักที่ไม่เปิดเผย
 _MASK_CHARS = "xX*#"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ชื่อเจ้าของบัญชี — ด่านที่สองของการจับคู่บัญชีผู้รับ
+#
+# ⚠️ เลขบัญชีที่ EasySlip เปิดเผยมีแค่ไม่กี่หลัก บัญชีคนละธนาคารคนละคน
+# จึงบังเอิญตรงกันได้จริง (เจอมาแล้ว: สลิปเข้าบัญชีคนอื่นแต่ 4 ตัวท้ายชนกับของเรา)
+# ถ้าดูแต่ตัวเลขอย่างเดียว เงินที่ไม่ได้เข้าบริษัทจะถูกรับเข้าชีท
+#
+# 🔧 วิธีใช้: ใส่ชื่อเจ้าของบัญชีตามที่ธนาคารแสดงบนสลิป (พิมพ์แค่บางส่วนก็ได้
+#    เช่นนามสกุล หรือชื่อบริษัทแบบย่อ ระบบเทียบแบบ "มีคำนี้อยู่ในชื่อไหม")
+#    เว้นว่าง = ยังไม่ตรวจชื่อบัญชีนั้น (จับคู่ด้วยเลขอย่างเดียวเหมือนเดิม)
+#
+# หาชื่อจริงได้จากฐานข้อมูล ดูคำสั่ง SQL ใน scripts/check_account_owners.sql
+# ─────────────────────────────────────────────────────────────────────────────
+ACCOUNT_OWNERS = {
+    # ชื่อเจ้าของบัญชีตามที่ธนาคารแสดงบนสลิป — ใส่ทั้งไทยและอังกฤษ
+    # เพราะบางสลิปแสดงชื่ออังกฤษ และบางธนาคารย่อนามสกุลเหลือตัวเดียว
+    #
+    # ใส่แค่บางส่วนก็พอ ระบบเทียบทีละคำและยอมให้ชื่อบนสลิปถูกย่อ
+    # เว้นว่าง = ยังไม่ตรวจบัญชีนั้น (จับคู่ด้วยเลขอย่างเดียวเหมือนเดิม)
+    "SCB-CP":      ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
+    "BAY-CKB":     ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
+    "KB-CKB":      ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
+    "KB-CKB97726": ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
+    "KKP-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
+    "GSB-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
+    "BBL-Ploy":    ["อุมาพร พงพันสถาพร", "Aumaporn Phongphansataporn"],
+    "GSB-Ativit":  ["อติวิช ฉวีนาค", "Ativit Chahwinak"],
+    "KKP-LS":      ["เลอสรร บุญลือ", "Loesan Bunlue"],
+    "TTB-Nat":     ["ณัฐนิกา", "Nattanika Chipomja"],
+    "GSB-Teera":   ["ธีระ สุเมธีวรากร", "Teera Sumeteewarakorn"],
+    "KB-BS":       ["บจก. บิลท์สเปค", "BUILTSPAC"],
+    "GSB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
+    "TTB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
+    "SCB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
+    "TTB-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
+    "SCB-MT20234": ["บริษัท มีทอง การช่าง จำกัด", "MEETHONG KARNCHANG"],
+    "KB-CP37446":  ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
+    "KB-CP05761":  ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
+    # "Montri" เพิ่มไว้เพราะ มนตรี สะกดอังกฤษได้สองแบบ ถ้าธนาคารใช้แบบไหนก็ผ่าน
+    "GSB-Mon":     ["มนตรี กัมปนาทโกศล", "Montiri Kumpanatkosol", "Montri Kumpanatkosol"],
+    "BAY-Mon":     ["มนตรี กัมปนาทโกศล", "Montiri Kumpanatkosol", "Montri Kumpanatkosol"],
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ธนาคารเจ้าของบัญชี — ด่านที่สามของการจับคู่บัญชีผู้รับ
+#
+# เลขที่ EasySlip เปิดเผยมีไม่กี่หลัก บัญชี "คนละธนาคาร" จึงทาบกันติดได้ง่ายมาก
+# ถ้าเทียบธนาคารด้วย เลขที่บังเอิญชนกันข้ามธนาคารจะถูกคัดออกทันที
+#
+# ธนาคารที่เราไม่ได้ถือบัญชี (กรุงไทย ธ.ก.ส. ฯลฯ) ก็ต้องรู้จักด้วย
+# ไม่งั้นจะกลายเป็น "ไม่รู้จักธนาคารนี้" แล้วปล่อยผ่าน ซึ่งคือช่องโหว่ที่จะปิด
+# ─────────────────────────────────────────────────────────────────────────────
+
+ACCOUNT_BANKS = {
+    "SCB-CP":      "SCB",
+    "BAY-CKB":     "BAY",
+    "KB-CKB":      "KBANK",
+    "KB-CKB97726": "KBANK",
+    "KKP-Jak":     "KKP",
+    "GSB-Jak":     "GSB",
+    "BBL-Ploy":    "BBL",
+    "GSB-Ativit":  "GSB",
+    "KKP-LS":      "KKP",
+    "TTB-Nat":     "TTB",
+    "GSB-Teera":   "GSB",
+    "KB-BS":       "KBANK",
+    "GSB-Yo":      "GSB",
+    "TTB-Yo":      "TTB",
+    "SCB-Yo":      "SCB",
+    "TTB-Jak":     "TTB",
+    "SCB-MT20234": "SCB",
+    "KB-CP37446":  "KBANK",
+    "KB-CP05761":  "KBANK",
+    "GSB-Mon":     "GSB",
+    "BAY-Mon":     "BAY",
+}
+
+# ชื่อ/รหัสที่ธนาคารกับ EasySlip ใช้เรียกตัวเอง -> รหัสกลางที่เราใช้
+# ใส่ทั้งรหัสตัวเลข ตัวย่ออังกฤษ และชื่อไทย เพราะแต่ละสลิปส่งมาไม่เหมือนกัน
+_BANK_ALIASES = {
+    # ธนาคารที่เราถือบัญชีอยู่
+    "scb": "SCB", "014": "SCB", "siamcommercialbank": "SCB", "ไทยพาณิชย์": "SCB",
+    "kbank": "KBANK", "004": "KBANK", "kasikornbank": "KBANK", "กสิกรไทย": "KBANK",
+    "bay": "BAY", "025": "BAY", "krungsri": "BAY", "bankofayudhya": "BAY",
+    "กรุงศรีอยุธยา": "BAY",
+    "kkp": "KKP", "069": "KKP", "kiatnakinphatra": "KKP", "kiatnakin": "KKP",
+    "เกียรตินาคินภัทร": "KKP", "เกียรตินาคิน": "KKP",
+    "gsb": "GSB", "030": "GSB", "governmentsavingsbank": "GSB", "ออมสิน": "GSB",
+    "bbl": "BBL", "002": "BBL", "bangkokbank": "BBL", "กรุงเทพ": "BBL",
+    "ttb": "TTB", "011": "TTB", "tmbthanachart": "TTB", "tmb": "TTB",
+    "ทหารไทยธนชาต": "TTB", "ทีเอ็มบีธนชาต": "TTB",
+    # ธนาคารที่เราไม่ได้ถือบัญชี — รู้จักไว้เพื่อฟันธงได้ว่า "คนละธนาคารแน่ๆ"
+    "ktb": "KTB", "006": "KTB", "krungthai": "KTB", "กรุงไทย": "KTB",
+    "baac": "BAAC", "034": "BAAC", "ธกส": "BAAC", "เพื่อการเกษตร": "BAAC",
+    "ghb": "GHB", "033": "GHB", "อาคารสงเคราะห์": "GHB",
+    "cimb": "CIMB", "022": "CIMB",
+    "uob": "UOB", "024": "UOB",
+    "tisco": "TISCO", "067": "TISCO", "ทิสโก้": "TISCO",
+    "lhbank": "LHB", "073": "LHB", "แลนด์แอนด์เฮ้าส์": "LHB",
+    "icbc": "ICBC", "070": "ICBC",
+    "citi": "CITI", "017": "CITI",
+    "sc": "SCBT", "020": "SCBT", "standardchartered": "SCBT",
+    "isbt": "IBANK", "066": "IBANK", "อิสลาม": "IBANK",
+    "truemoney": "TRUEMONEY", "tmn": "TRUEMONEY", "ทรูมันนี่": "TRUEMONEY",
+}
+
+
+def normalize_bank_key(value) -> str:
+    """แปลงชื่อ/รหัสธนาคารที่ได้จากสลิป ให้เป็นรหัสกลาง คืน "" ถ้าไม่รู้จัก
+
+    รับได้ทั้ง dict ({'id','name','short'}) และสตริงเดี่ยว
+    """
+    if isinstance(value, dict):
+        for field in ("short", "id", "name"):
+            found = normalize_bank_key(value.get(field))
+            if found:
+                return found
+        return ""
+
+    text = re.sub(r"[^0-9A-Za-zก-๙]", "", str(value or "")).lower()
+    if not text:
+        return ""
+    text = text.replace("ธนาคาร", "").replace("จำกัดมหาชน", "")
+
+    if text in _BANK_ALIASES:
+        return _BANK_ALIASES[text]
+    # รหัสตัวเลขที่ตัด 0 นำหน้าออกมาแล้ว เช่น '4' -> '004'
+    if text.isdigit():
+        padded = text.zfill(3)
+        if padded in _BANK_ALIASES:
+            return _BANK_ALIASES[padded]
+    # ชื่อเต็มยาวๆ เช่น 'ธนาคารกสิกรไทยจำกัดมหาชน' ให้จับจากคำที่ยาวพอจะไม่กำกวม
+    for alias, key in _BANK_ALIASES.items():
+        if len(alias) >= 5 and alias in text:
+            return key
+    return ""
+
+
+def bank_agrees(account_name: str, receiver_bank) -> bool | None:
+    """สลิปใบนี้เป็นธนาคารเดียวกับบัญชีที่จับคู่ได้ไหม
+
+    คืน None เมื่อ "ตอบไม่ได้" (ไม่รู้จักธนาคารที่สลิปส่งมา หรือยังไม่ได้จดว่า
+    บัญชีนี้อยู่ธนาคารไหน) ผู้เรียกต้องไม่เอา None ไปตัดสินว่าไม่ตรง
+    """
+    expected = ACCOUNT_BANKS.get(account_name, "")
+    if not expected:
+        return None
+    found = normalize_bank_key(receiver_bank)
+    if not found:
+        return None
+    return found == expected
+
+
+# คำนำหน้า/คำต่อท้ายที่ไม่ใช่ตัวชื่อ ตัดทิ้งก่อนเทียบ
+_OWNER_TITLES = {
+    "นาย", "นาง", "นางสาว", "นส", "ดร", "ด.ญ", "ดญ", "ดช",
+    "บจก", "บมจ", "หจก", "บริษัท", "ห้างหุ้นส่วนจำกัด", "จำกัด", "มหาชน",
+    "mr", "mrs", "miss", "ms", "dr",
+    "co", "ltd", "company", "limited", "public", "corp", "inc",
+}
+
+_OWNER_DOTTED = ("น.ส.", "ด.ญ.", "ด.ช.", "บจก.", "บมจ.", "หจก.", "(มหาชน)")
+
+
+def owner_tokens(value: str) -> list:
+    """หั่นชื่อเป็นคำๆ ตัดคำนำหน้าออก แล้วทำให้เทียบง่าย
+
+    'นาย เลอสรร บ'   -> ['เลอสรร', 'บ']
+    'บจก. บิลท์สเปค'  -> ['บิลท์สเปค']
+    'MR. LOESAN B'   -> ['loesan', 'b']
+    """
+    text = str(value or "")
+    for dotted in _OWNER_DOTTED:
+        text = text.replace(dotted, " ")
+    parts = re.split(r"[^0-9A-Za-zก-๙]+", text)
+    return [p.lower() for p in parts if p and p.lower() not in _OWNER_TITLES]
+
+
+def normalize_owner(value: str) -> str:
+    """ชื่อแบบติดกันไม่มีตัวคั่น ใช้ตอนเทียบหลวมๆ และตอนเขียน log"""
+    return "".join(owner_tokens(value))
+
+
+def _token_compatible(expected: str, found: str) -> bool:
+    """คำสองคำนี้เป็นคำเดียวกันได้ไหม โดยยอมให้ฝั่งใดฝั่งหนึ่งถูกย่อ
+
+    ธนาคารไทยย่อนามสกุลเหลือตัวเดียวบ่อยมาก ('เลอสรร บ') จึงเทียบแบบ
+    'ตัวที่สั้นกว่าเป็นตัวขึ้นต้นของอีกตัวไหม' ไม่ใช่เทียบให้เท่ากันเป๊ะ
+    """
+    return expected.startswith(found) or found.startswith(expected)
+
+
+def _alias_matches(alias: str, receiver_name: str) -> bool:
+    expected = owner_tokens(alias)
+    found = owner_tokens(receiver_name)
+    if not expected or not found:
+        return False
+    pairs = list(zip(expected, found))
+    return all(_token_compatible(exp, got) for exp, got in pairs)
+
+
+def owner_matches(account_name: str, receiver_name: str) -> bool:
+    """ชื่อผู้รับบนสลิป ตรงกับเจ้าของบัญชีที่เราจดไว้ไหม
+
+    คืน True เมื่อ 'ยังไม่ได้จดชื่อไว้' ด้วย เพื่อไม่ให้บัญชีที่ยังไม่ได้กรอกชื่อ
+    ถูกส่งเข้าแมนนวลทั้งหมดทันทีที่เพิ่มด่านนี้เข้ามา
+
+    คืน True เมื่อ 'สลิปไม่มีชื่อผู้รับ' ด้วย (เช่นวอลเล็ตบางเจ้า) เพราะไม่มีอะไรให้เทียบ
+    ไม่ใช่หลักฐานว่าผิดคน
+    """
+    configured = ACCOUNT_OWNERS.get(account_name, "")
+    aliases = [configured] if isinstance(configured, str) else list(configured or [])
+    aliases = [a for a in aliases if str(a).strip()]
+    if not aliases:
+        return True
+    if not owner_tokens(receiver_name):
+        return True
+    return any(_alias_matches(alias, receiver_name) for alias in aliases)
 
 
 def normalize_account_value(value: str) -> str:
@@ -323,18 +546,63 @@ def _verify_slip_once(qr_payload: str) -> dict:
             # ชี้ได้ชัดไหมว่าเป็นบัญชีบริษัทหรือไม่ใช่ — คนละเรื่องกับ "ตรงหรือไม่ตรง"
             # ถ้าสลิปปิดบังเลขจนชี้ไม่ได้ ต้องให้คนดู ห้ามปฏิเสธอัตโนมัติ
             receiver_bank_resolved = False
+            # เหตุผลว่าทำไมถึงตัดสินแบบนั้น ใช้เขียนข้อความให้คนกดปุ่มอ่านเข้าใจ
+            # ถ้าบอกเหตุผลผิด คนกดจะตัดสินผิดตาม — ด่านสุดท้ายคือคน
+            receiver_reason = "no_account"
+            receiver_owner_name = ""
+            receiver_bank_label = ""
+            receiver_candidate = ""
             if "receiver" in data and "account" in data["receiver"]:
                 recv_acc = data["receiver"]["account"]
                 raw_account = get_receiver_account_value(recv_acc)
                 receiver_bank_code = describe_receiver_account(recv_acc)
+                # ชื่อผู้รับตามที่ธนาคารแสดง ใช้ยืนยันว่าเลขที่ตรงกันเป็นบัญชีเดียวกันจริง
+                name_block = recv_acc.get("name") if isinstance(recv_acc, dict) else None
+                if isinstance(name_block, dict):
+                    receiver_owner_name = name_block.get("th") or name_block.get("en") or ""
+
+                # ธนาคารของผู้รับ อยู่คนละที่กับเลขบัญชี (receiver.bank ไม่ใช่ receiver.account)
+                receiver_bank_block = data["receiver"].get("bank") if isinstance(
+                    data.get("receiver"), dict) else None
+                receiver_bank_label = normalize_bank_key(receiver_bank_block)
 
                 # ทาบเลขที่ API เปิดเผย กับเลขบัญชีเต็มของบริษัท ทีละตำแหน่ง
                 matched_name, match_reason = match_company_account(raw_account)
+                receiver_reason = match_reason
+                receiver_candidate = matched_name or ""
 
-                if matched_name:
+                bank_verdict = bank_agrees(matched_name, receiver_bank_block) if matched_name else None
+
+                if matched_name and bank_verdict is False:
+                    # เลขทาบติดแต่คนละธนาคาร = คนละบัญชีแน่นอน เลขบังเอิญชนกันเฉยๆ
+                    # ยังไม่ปฏิเสธเอง เพราะอาจเป็นเราที่จดธนาคารของบัญชีไว้ผิด
+                    logger.warning(
+                        "Account digits matched but the bank does not | account=%s "
+                        "| matched=%s (%s) | slip bank=%s",
+                        raw_account, matched_name, ACCOUNT_BANKS.get(matched_name, "?"),
+                        receiver_bank_label or "unknown",
+                    )
+                    receiver_reason = "bank_mismatch"
+                    receiver_info = receiver_bank_code or matched_name
+                    matched_name = None
+
+                elif matched_name and not owner_matches(matched_name, receiver_owner_name):
+                    # เลขตรงแต่ชื่อเจ้าของไม่ตรง = คนละบัญชีที่เลขบังเอิญชนกัน
+                    # ห้ามรับเข้าเอง และห้ามปฏิเสธเอง เพราะอาจเป็นเราที่จดชื่อไว้ผิด
+                    logger.warning(
+                        "Account digits matched but the owner name does not | account=%s "
+                        "| matched=%s | receiver=%s",
+                        raw_account, matched_name, receiver_owner_name,
+                    )
+                    receiver_reason = "owner_mismatch"
+                    receiver_info = receiver_bank_code or matched_name
+                    matched_name = None
+
+                elif matched_name:
                     receiver_info = matched_name
                     receiver_bank_matches = True
                     receiver_bank_resolved = True
+                    receiver_reason = "matched"
 
                 elif match_reason in ("ambiguous", "fully_masked"):
                     # API เปิดเผยน้อยเกินกว่าจะชี้ได้ว่าบัญชีไหน — ห้ามเดา ให้คนตัดสิน
@@ -364,6 +632,10 @@ def _verify_slip_once(qr_payload: str) -> dict:
                 "receiver_bank_code": receiver_bank_code,
                 "receiver_bank_matches": receiver_bank_matches,
                 "receiver_bank_resolved": receiver_bank_resolved,
+                "receiver_reason": receiver_reason,
+                "receiver_owner_name": receiver_owner_name,
+                "receiver_bank_label": receiver_bank_label,
+                "receiver_candidate": receiver_candidate,
                 # เวลาที่โอนจริงตามสลิป ไม่ใช่เวลาที่บอทตรวจ — ใช้เขียนช่อง Time ในชีท
                 "transfer_at": parse_transfer_time(data.get("date")),
                 "raw_data": data

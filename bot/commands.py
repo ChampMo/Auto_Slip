@@ -16,11 +16,19 @@ from bot.handlers import (
     message_link,
     remember_review_message,
 )
+from bot.ephemeral import (
+    AUTO_DELETE_SECONDS,
+    EXPIRY_NOTE,
+    _delete_later,
+    notice_and_expire,
+    reply_and_expire,
+    will_expire,
+)
 from bot.keyboards import get_approval_keyboard
 from core.captions import extract_data_from_caption
 from core.config import config
 from core.version import describe_version
-from core.matcher import GROUP_CATEGORY, REOPENABLE_STATUSES
+from core.matcher import GROUP_CATEGORY, NEEDS_QR_STATUS, REOPENABLE_STATUSES
 from database.crud import (
     add_approver,
     add_audit_log,
@@ -167,7 +175,8 @@ async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None or user is None:
         return
 
-    await message.reply_text(
+    await reply_and_expire(
+        message,
         f"Your Telegram ID: {user.id}\n"
         f"Name: {describe_user(user)}"
     )
@@ -199,7 +208,7 @@ async def approvers_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text(NOT_ALLOWED_TEXT)
+        await reply_and_expire(message, NOT_ALLOWED_TEXT)
         return
 
     with SessionLocal() as db:
@@ -220,7 +229,8 @@ async def approvers_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     body = "\n".join(lines) if lines else "• (nobody added yet)"
     owner_body = "\n".join(owner_lines) if owner_lines else "• (none configured)"
 
-    await message.reply_text(
+    await reply_and_expire(
+        message,
         f"🔐 Owners from config: {len(owner_ids)}\n"
         "They can always approve and cannot be removed with a command.\n\n"
         f"{owner_body}\n\n"
@@ -237,7 +247,7 @@ async def approver_add_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text(NOT_ALLOWED_TEXT)
+        await reply_and_expire(message, NOT_ALLOWED_TEXT)
         return
 
     user_id, username, display_name, error = resolve_target(message, context.args)
@@ -273,7 +283,7 @@ async def approver_remove_command(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text(NOT_ALLOWED_TEXT)
+        await reply_and_expire(message, NOT_ALLOWED_TEXT)
         return
 
     user_id, username, display_name, error = resolve_target(message, context.args)
@@ -412,7 +422,7 @@ async def recheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text("Only approvers can send a slip back for checking.")
+        await reply_and_expire(message, "Only approvers can send a slip back for checking.")
         return
 
     replied = getattr(message, "reply_to_message", None)
@@ -421,7 +431,7 @@ async def recheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with SessionLocal() as db:
         txn, problem = find_slip(db, message.chat_id, replied, args)
         if problem:
-            await message.reply_text(problem)
+            await reply_and_expire(message, problem)
             return
         if txn is None:
             await message.reply_text(
@@ -438,15 +448,22 @@ async def recheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # ใบที่ค้างรอ QR ต้องกู้ได้ด้วย เพราะถ้าบอทล้มกลางทางหลังจากตั้งสถานะไว้
-        # ข้อความที่ใช้ตอบ QR จะหายไปพร้อมกัน แล้วใบนั้นจะไม่มีทางไปต่อเลย
-        if status.lower() not in REOPENABLE_STATUSES:
+        # เดิมปฏิเสธใบที่ยังไม่ถูกตัดสิน โดยอ้างว่า "ปุ่มยังอยู่บนข้อความเดิม"
+        # ซึ่งไม่จริงเสมอไป — ข้อความถูกลบได้ และเมื่อลบแล้วใบนั้นจะไม่มีทางไปต่อเลย
+        # จึงยอมให้เรียกปุ่มชุดใหม่มาแทน แล้วปิดปุ่มชุดเก่าทิ้ง
+        # การกดซ้ำไม่อันตราย เพราะการจองสิทธิ์ตัดสินอยู่ที่ฐานข้อมูล ไม่ได้อยู่ที่ปุ่ม
+        # "เรียกปุ่มใหม่" คือใบที่ยังไม่เคยถูกตัดสิน
+        # ส่วน interrupted คือบันทึกไม่สำเร็จ ซึ่งเป็นการ "ส่งกลับมาตัดสินใหม่" จริงๆ
+        reissue = status.lower() in ("pending", NEEDS_QR_STATUS)
+        if not reissue and status.lower() not in REOPENABLE_STATUSES:
             await message.reply_text(
-                f"This slip is not finished yet ({STATUS_ICONS.get(status.lower(), status)}). "
-                "Nothing to send back — the buttons are still live on the original message."
+                f"This slip cannot be sent back ({STATUS_ICONS.get(status.lower(), status)})."
             )
             return
 
+        # คัดออกมาก่อนปิด session — นอกบล็อกนี้แตะ txn ไม่ได้แล้ว
+        old_review_msg_id = txn.review_msg_id
+        slip_chat_id = txn.chat_id
         batch_id = txn.batch_id
         txn.status = "pending"
         actor = describe_actor(user)
@@ -463,13 +480,20 @@ async def recheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("Slip sent back for checking | batch_id=%s | by=%s", batch_id, actor)
 
+    # ปุ่มชุดเก่าอาจยังอยู่ (ถ้าข้อความไม่ได้ถูกลบ) ต้องปิดก่อน ไม่งั้นจะมีสองชุดให้กด
+    if old_review_msg_id:
+        from bot.handlers import close_review_buttons
+        await close_review_buttons(context.bot, slip_chat_id, old_review_msg_id)
+
     sent = await message.reply_text(
-        "♻️ Sent back for checking\n\n"
-        f"Sent back by: {describe_user(user)}\n\n"
+        ("♻️ Buttons sent again" if reissue else "♻️ Sent back for checking")
+        + f"\n\nAsked by: {describe_user(user)}\n\n"
         + "\n".join(details)
         + "\n\nThese are the details already on file — the slip was not verified with the bank again.\n"
         "Choose Receive to save it to today's sheet, or Reject to discard it.",
-        reply_markup=get_approval_keyboard(batch_id),
+        # ปุ่มเติม QR โผล่เฉพาะตอน /recheck ไม่โผล่ตอนบอทตรวจรอบแรก
+        # (ตอนแรกจะดูเหมือนงานยังไม่จบ) — ส่วนตอนนี้คือตอนที่คนตั้งใจกลับมาแก้พอดี
+        reply_markup=get_approval_keyboard(batch_id, with_add_qr=True),
     )
     remember_review_message(batch_id, getattr(sent, "message_id", None))
 
@@ -483,7 +507,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = message.chat_id
     if not can_read_status(user, chat_id):
-        await message.reply_text("You are not allowed to look up slips here.")
+        await reply_and_expire(message, "You are not allowed to look up slips here.")
         return
 
     replied = getattr(message, "reply_to_message", None)
@@ -493,10 +517,11 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ใช้ตัวค้นหาตัวเดียวกับ /recheck จะได้ทำงานเหมือนกันเสมอ
         txn, problem = find_slip(db, chat_id, replied, args)
         if problem:
-            await message.reply_text(problem)
+            await reply_and_expire(message, problem)
             return
         if txn is None:
-            await message.reply_text(
+            await reply_and_expire(
+                message,
                 "Reply to the slip photo and send /status again, "
                 "or use /status <ID> with the ID written in the caption."
             )
@@ -534,7 +559,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # โชว์ batch id ไว้ให้เอาไปใช้กับ /status -b ได้ ถ้าข้อความเดิมหาไม่เจอแล้ว
     body += [f"Batch: {slip_batch_id[:12]}"]
 
-    await message.reply_text("\n".join(body))
+    await reply_and_expire(message, "\n".join(body))
 
 
 async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -545,14 +570,19 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text("Only approvers can list waiting slips.")
+        await reply_and_expire(message, "Only approvers can list waiting slips.")
         return
 
     chat_id = str(message.chat_id)
+    # อยู่ในกลุ่มที่ลงทะเบียน = ดูเฉพาะกลุ่มนั้น / นอกกลุ่ม = ดูทุกกลุ่ม
+    # ใช้กติกาเดียวกับ /today ไม่งั้นสองคำสั่งจะให้ตัวเลขคนละอย่างจนคนสับสน
+    in_group = chat_id in GROUP_CATEGORY
     with SessionLocal() as db:
+        query = db.query(Transaction).filter(Transaction.status.in_(OPEN_STATUSES))
+        if in_group:
+            query = query.filter(Transaction.chat_id == chat_id)
         waiting = (
-            db.query(Transaction)
-            .filter(Transaction.chat_id == chat_id, Transaction.status.in_(OPEN_STATUSES))
+            query
             .order_by(Transaction.created_at.desc())
             .limit(10)
             .all()
@@ -574,7 +604,9 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     if not rows:
-        await message.reply_text("✅ Nothing is waiting — every slip in this chat has been handled.")
+        where = "in this chat" if in_group else "in any chat"
+        await reply_and_expire(
+            message, f"✅ Nothing is waiting — every slip {where} has been handled.")
         return
 
     lines = [f"⏳ {total_open} slip(s) waiting", ""]
@@ -587,7 +619,7 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if total_open > len(rows):
         lines.append(f"\n...and {total_open - len(rows)} more.")
 
-    await message.reply_text("\n".join(lines))
+    await reply_and_expire(message, "\n".join(lines))
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -598,7 +630,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text("Only approvers can see the daily summary.")
+        await reply_and_expire(message, "Only approvers can see the daily summary.")
         return
 
     now = get_business_now()
@@ -623,7 +655,8 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     scope = "this chat" if in_group else "all chats"
-    await message.reply_text(
+    await reply_and_expire(
+        message,
         f"📊 Today · {get_sheet_name_for_datetime(now)} · {scope}\n\n"
         f"Received  {len(received)} · {format_thb(total)}\n"
         f"Rejected  {len(rejected)}\n"
@@ -686,7 +719,7 @@ async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(user.id) not in load_approver_ids():
-        await message.reply_text("Only approvers can run the health check.")
+        await reply_and_expire(message, "Only approvers can run the health check.")
         return
 
     notice = await message.reply_text("🩺 Checking...")
@@ -726,7 +759,7 @@ async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         relay_line = "⚠️ DISCONNECTED — slips from other bots are not coming in"
 
-    await notice.edit_text(
+    health_text = (
         f"🩺 Health · {describe_version()}\n\n"
         f"Relay:        {relay_line}\n"
         f"Database:     {database_line}\n"
@@ -737,6 +770,10 @@ async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Approvers:    {len(approver_ids)} ({owners} owner(s) from config)\n\n"
         "Scheduled jobs:\n" + "\n".join(job_lines)
     )
+    # /health มักถูกเรียกตอนไล่ปัญหา ผลเก่าที่ค้างอยู่ทำให้เข้าใจผิดได้ง่าย
+    await notice.edit_text(health_text + (EXPIRY_NOTE if will_expire(message) else ""))
+    if will_expire(message):
+        asyncio.create_task(_delete_later(notice, message))
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -745,7 +782,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
-    await message.reply_text(
+    await reply_and_expire(
+        message,
         "🤖 Auto Slip — commands\n\n"
         "Everyone:\n"
         "  /status — reply to a slip photo to see how it ended,\n"
