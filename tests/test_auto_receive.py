@@ -73,10 +73,11 @@ check("caption ไม่ได้บอกยอด", amounts_match(None, 100.0)
 check("API ไม่ได้ยอด", amounts_match(100.0, None), False)
 
 print("\n=== ข้อ 3: บัญชีผู้รับ 4 หลัก ===")
-# KKP-LS = 205-260-2984 เทียบแบบทาบตำแหน่ง ไม่ยึดว่าธนาคารเปิดเผยหลักไหน
-check("เปิดเผย 4 ตัวท้าย -> KKP-LS", match_company_account("xxx-xxx-2984")[0], "KKP-LS")
-check("เปิดเผยกลางเลข -> KKP-LS", match_company_account("xxx-260-xxxx")[0], "KKP-LS")
-check("API ส่งเลขเต็ม -> KKP-LS", match_company_account("205-260-2984")[0], "KKP-LS")
+# KB-PCM = 237-251-1844 เทียบแบบทาบตำแหน่ง ไม่ยึดว่าธนาคารเปิดเผยหลักไหน
+check("เปิดเผย 4 ตัวท้าย -> KB-PCM", match_company_account("xxx-xxx-1844")[0], "KB-PCM")
+check("เปิดเผยกลางเลข -> KB-PCM", match_company_account("xxx-251-xxxx")[0], "KB-PCM")
+check("API ส่งเลขเต็ม -> KB-PCM", match_company_account("237-251-1844")[0], "KB-PCM")
+check("API ส่งเลขเต็ม -> KTB-Lertpong", match_company_account("795-077-1410")[0], "KTB-Lertpong")
 check("บัญชีคนอื่น", match_company_account("xxx-xxx-1234")[0], None)
 check("ไม่มีข้อมูลผู้รับ", match_company_account("")[1], "no_account")
 
@@ -131,7 +132,7 @@ name_ok = is_reported_name_verified(["นาย ดุลยฤทธิ์ ส"
 check("รูป 2 (format Trans) ข้อชื่อ", name_ok, True)
 check("รูป 2 ผลลัพธ์", determine_verification_action(
     api_success=True, amount_matches=amounts_match(100.0, 100.0), name_matches=name_ok,
-    bank_matches=match_company_account("xxx-xxx-2984")[0] is not None, multi_slip_batch=False),
+    bank_matches=match_company_account("xxx-xxx-1844")[0] is not None, multi_slip_batch=False),
     VerificationDecision.AUTO_RECEIVE)
 
 print("\n=== กดปุ่ม Receive: รู้บัญชีอยู่แล้วต้องไม่ถามซ้ำ ===")
@@ -143,9 +144,9 @@ class FakeTxn:
         self.chat_bank = chat_bank
 
 
-check("API map บัญชีได้แล้ว (เคสในรูป)", resolve_known_bank_value(FakeTxn(receiver_account="KKP-LS")), "KKP-LS")
-check("มีช่องว่างติดมา", resolve_known_bank_value(FakeTxn(receiver_account="  KKP-LS  ")), "KKP-LS")
-check("เคยเลือกบัญชีไว้แล้ว", resolve_known_bank_value(FakeTxn(chat_bank="SCB-CP")), "SCB-CP")
+check("API map บัญชีได้แล้ว (เคสในรูป)", resolve_known_bank_value(FakeTxn(receiver_account="KB-PCM")), "KB-PCM")
+check("มีช่องว่างติดมา", resolve_known_bank_value(FakeTxn(receiver_account="  KB-PCM  ")), "KB-PCM")
+check("เคยเลือกบัญชีไว้แล้ว", resolve_known_bank_value(FakeTxn(chat_bank="KTB-Lertpong")), "KTB-Lertpong")
 check("เลข 4 หลักที่ map ไม่ได้ -> ต้องถาม", resolve_known_bank_value(FakeTxn(receiver_account="2984x")), "")
 check("ชื่อร้าน/พร้อมเพย์ -> ต้องถาม", resolve_known_bank_value(FakeTxn(receiver_account="นาย เลอสรร บุญลือ")), "")
 check("ค่าขีด -> ต้องถาม", resolve_known_bank_value(FakeTxn(receiver_account="-")), "")
@@ -154,12 +155,12 @@ check("ทุกค่าใน dropdown ต้องถูกยอมรับ
       all(resolve_known_bank_value(FakeTxn(receiver_account=v)) == v for v in BANK_DROPDOWN_VALUES), True)
 
 print("\n=== หลายสลิป: บัญชีผู้รับตรงกันทุกใบหรือไม่ ===")
-check("ใบเดียว", unique_receiver_account(["KKP-LS"]), "KKP-LS")
-check("2 ใบเข้าบัญชีเดียวกัน (เคสในรูป)", unique_receiver_account(["KKP-LS", "KKP-LS"]), "KKP-LS")
-check("3 ใบเข้าบัญชีเดียวกัน", unique_receiver_account(["KKP-LS", "KKP-LS", "KKP-LS"]), "KKP-LS")
-check("มีช่องว่างไม่เท่ากัน", unique_receiver_account([" KKP-LS", "KKP-LS "]), "KKP-LS")
-check("เข้าคนละบัญชี -> ต้องถาม", unique_receiver_account(["KKP-LS", "SCB-CP"]), "")
-check("อ่านได้บางใบ", unique_receiver_account(["KKP-LS", ""]), "KKP-LS")
+check("ใบเดียว", unique_receiver_account(["KB-PCM"]), "KB-PCM")
+check("2 ใบเข้าบัญชีเดียวกัน (เคสในรูป)", unique_receiver_account(["KB-PCM", "KB-PCM"]), "KB-PCM")
+check("3 ใบเข้าบัญชีเดียวกัน", unique_receiver_account(["KB-PCM", "KB-PCM", "KB-PCM"]), "KB-PCM")
+check("มีช่องว่างไม่เท่ากัน", unique_receiver_account([" KB-PCM", "KB-PCM "]), "KB-PCM")
+check("เข้าคนละบัญชี -> ต้องถาม", unique_receiver_account(["KB-PCM", "KTB-Lertpong"]), "")
+check("อ่านได้บางใบ", unique_receiver_account(["KB-PCM", ""]), "KB-PCM")
 check("อ่านไม่ได้เลย", unique_receiver_account(["", "  "]), "")
 check("ไม่มีข้อมูล", unique_receiver_account([]), "")
 

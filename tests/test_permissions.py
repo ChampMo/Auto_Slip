@@ -140,7 +140,7 @@ async def main():
     check("  ไม่มี user ไม่ผ่าน", h.is_approver(None), False)
 
     print("\n=== คนนอกกดปุ่ม ===")
-    new_slip("p1", receiver_account="KKP-LS")
+    new_slip("p1", receiver_account="KB-PCM")
     q = await press("receive_p1", OUTSIDER)
     check("ขึ้น popup เตือน", "not allowed to approve" in q.alerts[0], True)
     check("  ไม่แก้ข้อความในกลุ่ม", q.texts, [])
@@ -148,7 +148,7 @@ async def main():
     check("  ไม่มี audit log", audit_of("p1"), [])
 
     print("\n=== คนนอกแอบกดปุ่มเลือกธนาคาร (ทางลัดที่คนมักลืมปิด) ===")
-    q = await press("bank_p1_SCB-CP", OUTSIDER)
+    q = await press("bank_p1_KTB-Lertpong", OUTSIDER)
     check("ถูกบล็อกเหมือนกัน", "not allowed to approve" in q.alerts[0], True)
     check("  ไม่ถูกเขียนลงชีท", status_of("p1"), "pending")
     q = await press("back_p1", OUTSIDER)
@@ -176,8 +176,8 @@ async def main():
     print("\n=== เลือกธนาคารเอง ===")
     new_slip("p3")
     await press("receive_p3", APPROVER)          # ยังไม่รู้บัญชี -> ขึ้นปุ่มเลือก
-    q = await press("bank_p3_SCB-CP", APPROVER)
-    check("บันทึกด้วยบัญชีที่เลือก", "Account: SCB-CP" in q.last_text, True)
+    q = await press("bank_p3_KTB-Lertpong", APPROVER)
+    check("บันทึกด้วยบัญชีที่เลือก", "Account: KTB-Lertpong" in q.last_text, True)
     check("  มีชื่อผู้อนุมัติ", "Approved by: @maryann" in q.last_text, True)
     check("  audit บอกว่าเลือกเอง", [a for a, _ in audit_of("p3")][0], "manual_bank_selected")
 
@@ -191,7 +191,7 @@ async def main():
     print("\n=== ไม่ได้ตั้งรายชื่อเลย -> ห้ามทุกคน ===")
     original = config.SLIP_APPROVER_IDS
     config.SLIP_APPROVER_IDS = frozenset()
-    new_slip("p5", receiver_account="KKP-LS")
+    new_slip("p5", receiver_account="KB-PCM")
     q = await press("receive_p5", APPROVER)
     check("แม้แต่คนที่เคยมีสิทธิ์ก็กดไม่ได้", "No one is allowed to approve" in q.alerts[0], True)
     check("  บอกวิธีแก้", "approver list" in q.alerts[0], True)

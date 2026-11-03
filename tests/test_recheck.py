@@ -154,7 +154,7 @@ check("ไม่มีป้ายเลย -> ไม่ติดธง (ปฏ�
 async def main():
     print("\n=== 3. /recheck ส่งสลิปที่ถูกปฏิเสธกลับมาตรวจ ===")
     make_slip("r1", 500, "Reject", chat_trans_id="0000123", chat_amount=None,
-              receiver_account="KKP-LS")
+              receiver_account="KB-PCM")
     msg = await run_recheck(ADMIN, reply_to_id=500)
     check("บอกว่าเปิดใหม่แล้ว", "♻️ Sent back for checking" in text_of(msg.last), True)
     check("  มีปุ่มให้กด", msg.last.keyboard is not None, True)
@@ -170,14 +170,14 @@ async def main():
     make_slip("r1b", 510, "Reject", chat_trans_id="0000200",
               chat_fullname=None, chat_amount=None,
               sender_names="นาย กฤษฎากร ช", api_total_amount=200.0,
-              receiver_account="KKP-LS",
+              receiver_account="KB-PCM",
               caption_warning="The message has no amount label, but it contains 200.00.")
     msg = await run_recheck(ADMIN, reply_to_id=510)
     body = text_of(msg.last)
     check("เทียบชื่อให้เห็นทั้งสองฝั่ง",
           "Slip: นาย กฤษฎากร ช" in body and "Chat: (not given)" in body, True)
     check("  บอกว่ายอดไม่ตรง", "❌ Amount does not match" in body, True)
-    check("  บอกว่าบัญชีผ่าน", "✅ Account KKP-LS" in body, True)
+    check("  บอกว่าบัญชีผ่าน", "✅ Account KB-PCM" in body, True)
     check("  ยกคำเตือนเดิมมาด้วย", "no amount label" in body, True)
     check("  บอกว่าไม่ได้ตรวจกับธนาคารซ้ำ", "not verified with the bank again" in body, True)
 

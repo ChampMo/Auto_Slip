@@ -90,58 +90,74 @@ check("  คืนตารางกลับเรียบร้อย", len(e
 check("ตอนนี้ทุกบัญชีมีเลขครบแล้ว",
       sorted(set(COMPANY_ACCOUNTS) - set(known_company_accounts())), [])
 
-print("\n=== สามบัญชี TTB ที่เลขคล้ายกัน ต้องแยกออกจากกัน ===")
-# เคยเป็นจุดที่ข้อมูลชนกัน จึงล็อกไว้กันพลาดซ้ำ
-TTB = {"TTB-Nat": "9247580914", "TTB-Jak": "9192560010", "TTB-Yo": "9242185149"}
-for name, account in TTB.items():
-    check(f"{name} เลขตรงกับที่ลงทะเบียน", known_company_accounts()[name], account)
+print("\n=== บัญชีที่ใช้อยู่ตอนนี้ ===")
+KB_PCM = "2372511844"        # กสิกรไทย 237-251-1844  บจก. พชรมน การช่าง
+KTB_LERT = "7950771410"      # กรุงไทย  795-077-1410  เลิศพงษ์ รชตธนานันต์
+check("มีแค่สองบัญชี", sorted(COMPANY_ACCOUNTS), ["KB-PCM", "KTB-Lertpong"])
+check("KB-PCM เลขตรงกับที่ลงทะเบียน", known_company_accounts()["KB-PCM"], KB_PCM)
+check("KTB-Lertpong เลขตรงกับที่ลงทะเบียน", known_company_accounts()["KTB-Lertpong"], KTB_LERT)
+
+for name, account in (("KB-PCM", KB_PCM), ("KTB-Lertpong", KTB_LERT)):
     check(f"  {name} เปิด 4 ท้าย", match_company_account(reveal_last(account, 4))[0], name)
     check(f"  {name} เปิด 4 ก่อนท้าย", match_company_account(mask_window(account, 5, 4))[0], name)
-check("ไม่มีสองใบใช้เลขเดียวกัน", len(set(TTB.values())), 3)
+    check(f"  {name} เปิดเผย 6 หลัก", match_company_account(mask_window(account, 2, 6))[0], name)
 
-print("\n=== เคสที่โค้ดเดิมพลาด ===")
-SCB_CP = "2842525111"      # 10 หลัก
-GSB_JAK = "020481919809"   # 12 หลัก
+# รูปแบบมาสก์ที่ธนาคารส่งมาจริง (xxx-x-x####-x)
+check("KBank แบบมาสก์จริง", match_company_account("xxx-x-x1184-x")[0], "KB-PCM")
+check("KTB แบบมาสก์จริง", match_company_account("xxx-x-x7141-x")[0], "KTB-Lertpong")
+check("API ส่งเลขเต็มมา (KB)", match_company_account("237-251-1844")[0], "KB-PCM")
+check("API ส่งเลขเต็มมา (KTB)", match_company_account("795-077-1410")[0], "KTB-Lertpong")
 
-
-# เคสจริงที่โค้ดเดิมพัง: TTB-Yo = 9242185149 แต่ API เปิดเผย 8514 (ไม่ใช่ 4 ตัวท้าย)
-check("4 ตัวก่อนสุดท้าย (แบบที่ API ส่งมาจริง)",
-      match_company_account("xxx-x-x8514-x")[0], "TTB-Yo")
-check("  GSB-Ativit เปิดกลางเลขเหมือนกัน",
-      match_company_account("xxxxxxx9877x")[0], "GSB-Ativit")
-check("  4 ตัวท้าย SCB-CP", match_company_account(reveal_last(SCB_CP, 4))[0], "SCB-CP")
-check("  4 ตัวก่อนสุดท้าย SCB-CP", match_company_account(mask_window(SCB_CP, 5, 4))[0], "SCB-CP")
-check("  API ส่งเลขเต็มมา", match_company_account("284-252-511-1")[0], "SCB-CP")
-check("  เปิดเผย 5 หลัก", match_company_account(reveal_last(SCB_CP, 5))[0], "SCB-CP")
-check("  เปิดเผย 6 หลัก", match_company_account(mask_window(SCB_CP, 2, 6))[0], "SCB-CP")
-check("  บัญชี 12 หลัก (GSB)", match_company_account(reveal_last(GSB_JAK, 4))[0], "GSB-Jak")
-check("  GSB เปิดกลางเลข", match_company_account(mask_window(GSB_JAK, 3, 4))[0], "GSB-Jak")
-# GSB ทุกบัญชีขึ้นต้น 0204 เหมือนกัน เปิดแค่หัวเลขจึงแยกไม่ออกจริงๆ
-check("  GSB เปิดหัวเลข -> กำกวมถูกแล้ว",
-      match_company_account(mask_window(GSB_JAK, 0, 4))[1], "ambiguous")
+print("\n=== บัญชีที่เลิกใช้แล้ว ต้องไม่ถูกจับคู่อีก ===")
+check("SCB-CP เดิม 284-252-511-1", match_company_account("284-252-511-1")[1], "not_company")
+check("  TTB-Yo เดิม (มาสก์แบบที่เคยส่งมา)", match_company_account("xxx-x-x8514-x")[1], "not_company")
+check("  GSB 12 หลักเดิม", match_company_account("020-481-91980-9")[1], "not_company")
 
 print("\n=== ต้องไม่จับคู่มั่ว ===")
 check("บัญชีคนอื่น", match_company_account("xxx-x-x9999-x")[0], None)
 check("  ไม่ใช่บัญชีบริษัท (เหตุผล)", match_company_account("999-9-99999-9")[1], "not_company")
 check("  ความยาวไม่ตรง ไม่จับคู่ข้ามแบบ",
-      match_company_account("xxxxx5111x" + "xx")[0], None)
+      match_company_account("xxxxx1184x" + "xx")[0], None)
 check("  ปิดหมดทุกหลัก", match_company_account("xxx-x-xxxxx-x")[1], "fully_masked")
 check("  ไม่มีเลขบัญชีมาเลย", match_company_account("")[1], "no_account")
 check("  None", match_company_account(None)[1], "no_account")
 
 print("\n=== เปิดเผยน้อยจนชี้ไม่ได้ -> ห้ามเดา ===")
-# SCB-CP 2842525111 กับ SCB-MT20234 2842520234 ขึ้นต้น 284252 เหมือนกัน
-got, reason = match_company_account(mask_window(SCB_CP, 0, 4))
-check("เข้าได้หลายบัญชี -> ไม่เลือกให้", got, None)
-check("  บอกว่ากำกวม", reason, "ambiguous")
-check("  พอเปิดถึงหลักที่ต่างกัน ก็ชี้ได้",
-      match_company_account(mask_window(SCB_CP, 0, 7))[0], "SCB-CP")
+# ทดสอบกลไก ด้วยบัญชีสมมติที่ขึ้นต้นเหมือน KB-PCM (บัญชีจริงตอนนี้ไม่มีคู่ไหนขึ้นต้นเหมือนกัน)
+saved_table = dict(es.COMPANY_ACCOUNTS)
+try:
+    es.COMPANY_ACCOUNTS["ZZ-Twin"] = "237-251-9999"
+    got, reason = match_company_account(mask_window(KB_PCM, 0, 4))
+    check("เข้าได้หลายบัญชี -> ไม่เลือกให้", got, None)
+    check("  บอกว่ากำกวม", reason, "ambiguous")
+    check("  พอเปิดถึงหลักที่ต่างกัน ก็ชี้ได้",
+          match_company_account(mask_window(KB_PCM, 0, 7))[0], "KB-PCM")
+finally:
+    es.COMPANY_ACCOUNTS.clear()
+    es.COMPANY_ACCOUNTS.update(saved_table)
+
+print("\n=== ชื่อบัญชียาวเกินปุ่ม Telegram ต้องถูกฟ้องตอนบูต ===")
+saved_table = dict(es.COMPANY_ACCOUNTS)
+try:
+    es.COMPANY_ACCOUNTS["KB-ชื่อยาวมากเกินไป"] = "111-111-1111"
+    check("ป้ายยาวเกิน 64 ไบต์ของ callback_data ถูกฟ้อง",
+          any("ไบต์" in p and "KB-ชื่อยาวมากเกินไป" in p for p in es.validate_company_accounts()), True)
+    check("  บัญชีที่ไม่มีธนาคาร/ชื่อเจ้าของกำกับ ถูกฟ้องด้วย",
+          sum("KB-ชื่อยาวมากเกินไป" in p for p in es.validate_company_accounts()), 3)
+finally:
+    es.COMPANY_ACCOUNTS.clear()
+    es.COMPANY_ACCOUNTS.update(saved_table)
+
+for name in COMPANY_ACCOUNTS:
+    longest = f"bank_{'f' * 40}_{name}"
+    check(f"{name} ใส่ปุ่มได้แม้รหัสสลิปยาวสุด", len(longest.encode("utf-8")) <= 64, True)
 
 print("\n=== ความถูกต้องของตารางบัญชี ===")
 problems = validate_company_accounts()
 print(f"พบปัญหา {len(problems)} ข้อ:")
 for p in problems:
     print(f"  • {p}")
+check("ตารางบัญชีปัจจุบันไม่มีปัญหาเลย", problems, [])
 
 print("\nRESULT:", "ALL PASS" if failed == 0 else f"{failed} FAILED")
 sys.exit(1 if failed else 0)

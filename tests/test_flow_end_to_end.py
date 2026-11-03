@@ -51,7 +51,7 @@ def check(label, got, expected):
 
 # ---- ปลอม EasySlip ----
 SLIP_AMOUNTS = {}
-SLIP_RECEIVERS = {}  # payload -> บัญชีผู้รับ (ไม่ระบุ = KKP-LS)
+SLIP_RECEIVERS = {}  # payload -> บัญชีผู้รับ (ไม่ระบุ = KB-PCM)
 
 
 def fake_verify_slip(payload):
@@ -64,7 +64,7 @@ def fake_verify_slip(payload):
         "amount": amount,
         "payload_amount": amount,
         "sender": "นาย ดุลยฤทธิ์ ส",
-        "receiver": SLIP_RECEIVERS.get(payload, "KKP-LS"),
+        "receiver": SLIP_RECEIVERS.get(payload, "KB-PCM"),
         "receiver_bank_code": "2984",
         "receiver_bank_matches": True,
         "transfer_at": _dt(2026, 8, 9, 0, 18, tzinfo=_tz(_td(hours=7))),
@@ -110,9 +110,9 @@ async def main():
         check("  ผูก QR ครบ 2 ใบ", db.query(UsedQR).count(), 2)
         txn = db.query(Transaction).first()
         check("  เก็บยอดรวมลง DB", txn.api_total_amount, 400.0)
-        check("  ทุกใบเข้าบัญชีเดียวกัน -> เก็บบัญชีเดียว", txn.receiver_account, "KKP-LS")
-        check("  กด Receive แล้วไม่ต้องถาม bank ซ้ำ", h.resolve_known_bank_value(txn), "KKP-LS")
-        check("  ชื่อผู้รับที่ซ้ำกันถูกยุบเหลือค่าเดียว", txn.receiver_names, "KKP-LS")
+        check("  ทุกใบเข้าบัญชีเดียวกัน -> เก็บบัญชีเดียว", txn.receiver_account, "KB-PCM")
+        check("  กด Receive แล้วไม่ต้องถาม bank ซ้ำ", h.resolve_known_bank_value(txn), "KB-PCM")
+        check("  ชื่อผู้รับที่ซ้ำกันถูกยุบเหลือค่าเดียว", txn.receiver_names, "KB-PCM")
         check("  ชื่อผู้ส่งที่ซ้ำกันถูกยุบเหลือค่าเดียว", txn.sender_names, "นาย ดุลยฤทธิ์ ส")
 
     print("\n=== รูปเดียว 1 QR ผ่านครบ 3 ข้อ ===")
@@ -158,11 +158,11 @@ async def main():
 
     print("\n=== อัลบั้มที่สลิปเข้าคนละบัญชี ===")
     SLIP_AMOUNTS.update({"QR_B1": 200.0, "QR_B2": 200.0})
-    SLIP_RECEIVERS.update({"QR_B1": "KKP-LS", "QR_B2": "SCB-CP"})
+    SLIP_RECEIVERS.update({"QR_B1": "KB-PCM", "QR_B2": "KTB-Lertpong"})
     await run_group(["QR_B1", "QR_B2"], CAPTION_400, photo_count=2, msg_id=110)
     with SessionLocal() as db:
         txn = db.query(Transaction).filter(Transaction.msg_id == "110").first()
-        check("บัญชีไม่ตรงกัน -> เก็บทั้งคู่ไว้", txn.receiver_account, "KKP-LS, SCB-CP")
+        check("บัญชีไม่ตรงกัน -> เก็บทั้งคู่ไว้", txn.receiver_account, "KB-PCM, KTB-Lertpong")
         check("  กด Receive แล้วต้องถามให้เลือกเอง", h.resolve_known_bank_value(txn), "")
 
     print("\n=== ส่งรูปเดิมซ้ำ (QR ที่เคยใช้แล้ว) ===")

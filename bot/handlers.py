@@ -377,7 +377,7 @@ def sum_batch_amount(amounts: list[float | None]) -> tuple[float | None, bool]:
 
 
 def join_unique(values: list[str]) -> str:
-    """รวมรายชื่อโดยตัดค่าซ้ำออก เช่น ['KKP-LS', 'KKP-LS'] -> 'KKP-LS'"""
+    """รวมรายชื่อโดยตัดค่าซ้ำออก เช่น ['KB-PCM', 'KB-PCM'] -> 'KB-PCM'"""
     unique_values = []
     for value in values:
         cleaned = (value or "").strip()
@@ -2205,6 +2205,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not txn:
                 await query.answer("Slip not found.", show_alert=True)
                 await query.edit_message_text(text=SLIP_NOT_FOUND_TEXT, reply_markup=None)
+                return
+
+            # ปุ่มที่ค้างอยู่จากก่อนเปลี่ยนรายชื่อบัญชียังกดได้ และ callback_data ปลอมแปลงได้
+            # ถ้าไม่เช็ค บัญชีที่เลิกใช้แล้ว (หรือค่าอะไรก็ได้) จะถูกเขียนลงชีทเป็นยอดรับเข้า
+            if bank_value not in BANK_DROPDOWN_VALUES:
+                logger.warning("Bank button with an unknown account | batch_id=%s | value=%r",
+                               txn.batch_id, bank_value)
+                await query.answer("This account is no longer in the list. Choose again.",
+                                   show_alert=True)
+                await query.edit_message_reply_markup(
+                    reply_markup=get_bank_selection_keyboard(txn.batch_id)
+                )
                 return
 
             # ถามเวลาโอนก่อนจองสถานะ — เส้นทางนี้มาจากการพิมพ์ยอดเอง ซึ่งข้ามด่านเวลาไป

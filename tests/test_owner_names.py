@@ -35,28 +35,27 @@ def aliases_of(account):
     return [value] if isinstance(value, str) else list(value)
 
 
-# --- ชื่อจริงจากสลิปที่รับเข้าไปแล้ว ต้องผ่านทุกใบ ไม่งั้นงานหยุดทั้งกลุ่ม ---
-for name in ("นาย เลอสรร บ", "MR. LOESAN B", "นาย เลอสรร บุญลือ"):
-    check(f"KKP-LS ยอมรับ {name}", owner_matches("KKP-LS", name), True)
+# --- ชื่อแบบต่างๆ ที่ธนาคารอาจแสดงบนสลิป ต้องผ่านทุกแบบ ไม่งั้นงานหยุดทั้งกลุ่ม ---
+for name in ("บจก. พชรมน การช่าง", "บริษัท พชรมน การช่าง จำกัด", "บจก. พชรมน ก",
+             "PHACHARAMON KANCHAANG CO.,LTD.", "PHACHARAMON KANCHAANG CO., LTD",
+             "Phacharamon Kanchaang Co.,ldt."):
+    check(f"KB-PCM ยอมรับ {name}", owner_matches("KB-PCM", name), True)
 
-for name in ("บจก. บ", "บจก. บิลท์สเปค", "BUILTSPAC C"):
-    check(f"KB-BS ยอมรับ {name}", owner_matches("KB-BS", name), True)
+for name in ("นาย เลิศพงษ์ ร", "นาย เลิศพงษ์ รชตธนานันต์", "MR. LERTPONG R",
+             "MR LERTPONG RACHATATHANAN"):
+    check(f"KTB-Lertpong ยอมรับ {name}", owner_matches("KTB-Lertpong", name), True)
 
-check("SCB-MT20234 ยอมรับชื่อเต็ม",
-      owner_matches("SCB-MT20234", "บริษัท มีทอง ก"), True)
-check("SCB-Yo ยอมรับชื่อย่อ",
-      owner_matches("SCB-Yo", "นาย อนุชา ส"), True)
-# ธนาคารสะกดยาวกว่าที่เราจดไว้ ('อติวิช' -> 'อติวิชญ์') ต้องยังผ่าน
-check("GSB-Ativit ยอมรับชื่อที่ยาวกว่าที่จด",
-      owner_matches("GSB-Ativit", "นาย อติวิชญ์ ฉ"), True)
-
-# --- เคสที่เจอจริง: เลขทาบกันได้แต่คนละคน ต้องไม่ผ่าน ---
-check("TTB-Jak ปฏิเสธผู้รับคนอื่น",
-      owner_matches("TTB-Jak", "นาย สุรศักดิ์ ส"), False)
-check("KKP-LS ปฏิเสธชื่ออื่น",
-      owner_matches("KKP-LS", "นาย สมชาย ข"), False)
-check("KB-BS ปฏิเสธบริษัทอื่น",
-      owner_matches("KB-BS", "บจก. ไทยรุ่งเรือง"), False)
+# --- เลขทาบกันได้แต่คนละคน ต้องไม่ผ่าน ---
+check("KB-PCM ปฏิเสธบริษัทอื่น",
+      owner_matches("KB-PCM", "บจก. ไทยรุ่งเรือง"), False)
+check("  KB-PCM ปฏิเสธบริษัทที่ชื่อคล้าย (มีทอง การช่าง)",
+      owner_matches("KB-PCM", "บริษัท มีทอง การช่าง จำกัด"), False)
+check("KTB-Lertpong ปฏิเสธชื่ออื่น",
+      owner_matches("KTB-Lertpong", "นาย สมชาย ข"), False)
+check("  KTB-Lertpong ปฏิเสธชื่อเดียวกันแต่นามสกุลอื่น",
+      owner_matches("KTB-Lertpong", "นาย เลิศพงษ์ สุขใจ"), False)
+check("ชื่อเจ้าของบัญชีหนึ่ง ไม่ผ่านอีกบัญชี",
+      owner_matches("KTB-Lertpong", "บจก. พชรมน การช่าง"), False)
 
 # --- ทุกบัญชีต้องมีชื่อกำกับ และต้องยอมรับชื่อของตัวเองทุกแบบ ---
 check("ทุกบัญชีมีชื่อกำกับครบ",
@@ -96,8 +95,8 @@ check("บัญชีที่ไม่มีในตาราง = ไม่�
       owner_matches("ไม่รู้จัก", "นาย ใครก็ได้ ก"), True)
 
 # --- สลิปไม่มีชื่อผู้รับ (วอลเล็ตบางเจ้า) ไม่ใช่หลักฐานว่าผิดคน ---
-check("ชื่อผู้รับว่าง = ไม่ตรวจ", owner_matches("KKP-LS", ""), True)
-check("ชื่อผู้รับเป็น None = ไม่ตรวจ", owner_matches("KKP-LS", None), True)
+check("ชื่อผู้รับว่าง = ไม่ตรวจ", owner_matches("KB-PCM", ""), True)
+check("ชื่อผู้รับเป็น None = ไม่ตรวจ", owner_matches("KB-PCM", None), True)
 
 # --- การหั่นคำ ---
 check("ตัดคำนำหน้าไทย", owner_tokens("นาย เลอสรร บ"), ["เลอสรร", "บ"])
@@ -105,6 +104,8 @@ check("ตัดคำนำหน้าอังกฤษ", owner_tokens("MR. L
 check("ตัด บจก.", owner_tokens("บจก. บิลท์สเปค"), ["บิลท์สเปค"])
 check("ตัด บริษัท/จำกัด", owner_tokens("บริษัท มีทอง จำกัด"), ["มีทอง"])
 check("ตัด CO.,LTD", owner_tokens("BUILTSPAC CO.,LTD"), ["builtspac"])
+check("ตัด Co., Ltd. ของ KB-PCM", owner_tokens("Phacharamon Kanchaang Co., Ltd."),
+      ["phacharamon", "kanchaang"])
 
 # --- เลขบัญชี: ห้ามจับคู่ผิดใบ แม้ธนาคารจะเปิดเผยแค่ 4 หลักติดกัน ---
 wrong_matches = []

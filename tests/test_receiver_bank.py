@@ -50,7 +50,7 @@ check("ไม่มีธนาคารของบัญชีที่ไม�
 
 # ── ป้ายชื่อบัญชีขึ้นต้นด้วยธนาคารอะไร ต้องตรงกับที่จดไว้ ──
 LABEL_PREFIX = {"SCB": "SCB", "BAY": "BAY", "KB": "KBANK", "KKP": "KKP",
-                "GSB": "GSB", "BBL": "BBL", "TTB": "TTB"}
+                "GSB": "GSB", "BBL": "BBL", "TTB": "TTB", "KTB": "KTB"}
 for account, bank in sorted(ACCOUNT_BANKS.items()):
     prefix = account.split("-")[0]
     check(f"{account} ป้ายชื่อกับธนาคารสอดคล้องกัน", LABEL_PREFIX.get(prefix), bank)
@@ -64,17 +64,24 @@ check("ชื่อไทยเต็ม", normalize_bank_key("ธนาคา�
 check("เกียรตินาคิน", normalize_bank_key("เกียรตินาคินภัทร"), "KKP")
 check("รับ dict ตามที่ API ส่งมา",
       normalize_bank_key({"id": "069", "name": "ธนาคารเกียรตินาคินภัทร", "short": "KKP"}), "KKP")
-check("ธนาคารที่เราไม่ได้ถือบัญชี ต้องรู้จักด้วย", normalize_bank_key("กรุงไทย"), "KTB")
+check("กรุงไทย ชื่อไทย", normalize_bank_key("กรุงไทย"), "KTB")
+check("  กรุงไทย ชื่อเต็ม", normalize_bank_key("ธนาคารกรุงไทย จำกัด (มหาชน)"), "KTB")
+check("  กรุงไทย รหัส", normalize_bank_key("006"), "KTB")
+check("  กรุงไทย อังกฤษ", normalize_bank_key("Krungthai Bank"), "KTB")
+check("ธนาคารที่เราไม่ได้ถือบัญชี ต้องรู้จักด้วย", normalize_bank_key("ไทยพาณิชย์"), "SCB")
+check("  กรุงเทพ ต้องไม่ถูกอ่านเป็นกรุงไทย", normalize_bank_key("ธนาคารกรุงเทพ"), "BBL")
 check("ไม่รู้จัก = ตอบไม่ได้", normalize_bank_key("ธนาคารดาวอังคาร"), "")
 check("ค่าว่าง = ตอบไม่ได้", normalize_bank_key(""), "")
 check("None = ตอบไม่ได้", normalize_bank_key(None), "")
 
 # ── เทียบธนาคารกับบัญชี ──
-check("ธนาคารเดียวกัน", bank_agrees("KKP-LS", {"short": "KKP"}), True)
-check("คนละธนาคาร", bank_agrees("KKP-LS", {"short": "KBANK"}), False)
-check("คนละธนาคาร (กรุงไทย)", bank_agrees("KKP-LS", {"short": "KTB"}), False)
-check("ธนาคารที่ไม่รู้จัก = ไม่ฟันธง", bank_agrees("KKP-LS", {"short": "???"}), None)
-check("บัญชีที่ไม่รู้จัก = ไม่ฟันธง", bank_agrees("ไม่มีจริง", {"short": "KKP"}), None)
+check("ธนาคารเดียวกัน", bank_agrees("KB-PCM", {"short": "KBANK"}), True)
+check("  ธนาคารเดียวกัน (กรุงไทย)", bank_agrees("KTB-Lertpong", {"short": "KTB"}), True)
+check("คนละธนาคาร", bank_agrees("KB-PCM", {"short": "KTB"}), False)
+check("  คนละธนาคาร (กลับกัน)", bank_agrees("KTB-Lertpong", {"short": "KBANK"}), False)
+check("  คนละธนาคาร (ไทยพาณิชย์)", bank_agrees("KTB-Lertpong", {"short": "SCB"}), False)
+check("ธนาคารที่ไม่รู้จัก = ไม่ฟันธง", bank_agrees("KB-PCM", {"short": "???"}), None)
+check("บัญชีที่ไม่รู้จัก = ไม่ฟันธง", bank_agrees("ไม่มีจริง", {"short": "KBANK"}), None)
 
 # ── ยิงผ่าน verify_slip จริง โดยปลอมคำตอบของ EasySlip ──
 def fake_response(bank_short, account_value, receiver_name):
@@ -109,30 +116,38 @@ def run_verify(bank_short, account_value, receiver_name):
         easyslip.requests = original
 
 
-# เลขทาบ KKP-LS ได้ ชื่อก็ตรง ธนาคารก็ตรง -> ผ่าน
-ok = run_verify("KKP", "XXX-X-XX298-4", "นาย เลอสรร บ")
-check("ธนาคารตรง -> จับคู่ได้", ok.get("receiver"), "KKP-LS")
+# เลขทาบ KB-PCM ได้ ชื่อก็ตรง ธนาคารก็ตรง -> ผ่าน
+ok = run_verify("KBANK", "XXX-X-XX184-4", "บจก. พชรมน ก")
+check("ธนาคารตรง -> จับคู่ได้", ok.get("receiver"), "KB-PCM")
+ktb_ok = run_verify("KTB", "XXX-X-XX141-0", "นาย เลิศพงษ์ ร")
+check("  KTB ธนาคารตรง -> จับคู่ได้", ktb_ok.get("receiver"), "KTB-Lertpong")
+check("  KTB ธนาคารตรง -> ผ่านด่านบัญชี", ktb_ok.get("receiver_bank_matches"), True)
+
+# บัญชีเดิมที่เลิกใช้แล้ว ต้องไม่ถูกรับเข้าอีก
+old = run_verify("KKP", "XXX-X-XX298-4", "นาย เลอสรร บ")
+check("บัญชีที่เลิกใช้ -> ไม่ผ่านด่านบัญชี", old.get("receiver_bank_matches"), False)
+check("  บัญชีที่เลิกใช้ -> ฟันธงว่าไม่ใช่ของเรา", old.get("receiver_reason"), "not_company")
 check("ธนาคารตรง -> ผ่านด่านบัญชี", ok.get("receiver_bank_matches"), True)
 check("ธนาคารตรง -> เหตุผล", ok.get("receiver_reason"), "matched")
 
-# เลขเดียวกันเป๊ะ แต่เป็นสลิปกสิกร -> ต้องไม่ผ่าน (นี่คือช่องโหว่ที่ปิด)
-bad_bank = run_verify("KBANK", "XXX-X-XX298-4", "นาย เลอสรร บ")
+# เลขเดียวกันเป๊ะ แต่เป็นสลิปไทยพาณิชย์ -> ต้องไม่ผ่าน (นี่คือช่องโหว่ที่ปิด)
+bad_bank = run_verify("SCB", "XXX-X-XX184-4", "บจก. พชรมน ก")
 check("คนละธนาคาร -> ไม่ผ่านด่านบัญชี", bad_bank.get("receiver_bank_matches"), False)
 check("คนละธนาคาร -> เหตุผล", bad_bank.get("receiver_reason"), "bank_mismatch")
 check("คนละธนาคาร -> ไม่ฟันธงว่าไม่ใช่ของเรา (ต้องให้คนดู)",
       bad_bank.get("receiver_bank_resolved"), False)
 check("คนละธนาคาร -> บอกได้ว่าเลขไปตรงกับใบไหน",
-      bad_bank.get("receiver_candidate"), "KKP-LS")
+      bad_bank.get("receiver_candidate"), "KB-PCM")
 
 # ธนาคารตรง แต่ชื่อคนรับคนละคน -> ต้องไม่ผ่าน
-bad_name = run_verify("TTB", "XXX-X-XX001-0", "นาย สุรศักดิ์ ส")
+bad_name = run_verify("KTB", "XXX-X-XX141-0", "นาย สุรศักดิ์ ส")
 check("ชื่อไม่ตรง -> ไม่ผ่านด่านบัญชี", bad_name.get("receiver_bank_matches"), False)
 check("ชื่อไม่ตรง -> เหตุผล", bad_name.get("receiver_reason"), "owner_mismatch")
 check("ชื่อไม่ตรง -> เก็บชื่อบนสลิปไว้บอกคนกด",
       bad_name.get("receiver_owner_name"), "นาย สุรศักดิ์ ส")
 
 # ธนาคารที่ EasySlip ไม่ได้ส่งมา ต้องไม่ทำให้ใบที่ถูกต้องตกไป
-no_bank = run_verify("", "XXX-X-XX298-4", "นาย เลอสรร บ")
+no_bank = run_verify("", "XXX-X-XX184-4", "บจก. พชรมน ก")
 check("ไม่รู้ธนาคาร -> ยังจับคู่ได้เหมือนเดิม", no_bank.get("receiver_bank_matches"), True)
 
 # ── ข้อความต้องบอกเหตุผลให้ตรงกับความจริง ──
@@ -144,19 +159,19 @@ from bot.handlers import (  # noqa: E402
 )
 
 text = build_bank_mismatch_reason(
-    ["XXX-X-XX298-4"], [False], ["bank_mismatch"], ["นาย เลอสรร บ"], ["KKP-LS"], ["KBANK"])
-check("ข้อความคนละธนาคาร บอกว่าเลขตรง", "matches KKP-LS" in text, True)
-check("ข้อความคนละธนาคาร บอกธนาคารบนสลิป", "KBANK" in text, True)
+    ["XXX-X-XX184-4"], [False], ["bank_mismatch"], ["บจก. พชรมน ก"], ["KB-PCM"], ["SCB"])
+check("ข้อความคนละธนาคาร บอกว่าเลขตรง", "matches KB-PCM" in text, True)
+check("ข้อความคนละธนาคาร บอกธนาคารบนสลิป", "SCB" in text, True)
 check("ข้อความคนละธนาคาร ไม่พูดว่าไม่ใช่บัญชีบริษัท",
       "is not a company account" in text, False)
 
 text = build_bank_mismatch_reason(
-    ["XXX-X-XX001-0"], [False], ["owner_mismatch"], ["นาย สุรศักดิ์ ส"], ["TTB-Jak"], ["TTB"])
+    ["XXX-X-XX141-0"], [False], ["owner_mismatch"], ["นาย สุรศักดิ์ ส"], ["KTB-Lertpong"], ["KTB"])
 check("ข้อความชื่อไม่ตรง บอกชื่อบนสลิป", "นาย สุรศักดิ์ ส" in text, True)
 check("ข้อความชื่อไม่ตรง ไม่พูดว่าไม่ใช่บัญชีบริษัท",
       "is not a company account" in text, False)
 
-text = build_bank_mismatch_reason(["2842xxxxxx"], [False], ["ambiguous"], [""], [""], [""])
+text = build_bank_mismatch_reason(["2372xxxxxx"], [False], ["ambiguous"], [""], [""], [""])
 check("ข้อความชี้ไม่ได้", "more than one company account" in text, True)
 
 text = build_bank_mismatch_reason(["999-9-99999-9"], [False], ["not_company"], [""], [""], [""])

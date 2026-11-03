@@ -29,31 +29,19 @@ UNKNOWN_ACCOUNT = ""
 
 # เรียงตามลำดับในชีทบัญชีของบริษัท เพื่อให้ตรวจทานเทียบกันได้ทีละบรรทัด
 # (ลำดับในตารางนี้ไม่มีผลต่อการทำงาน ปุ่มเลือกบัญชีเรียงตามตัวอักษรเสมอ)
+#
+# ⚠️ ชื่อบัญชี (ป้ายซ้ายมือ) ไปอยู่ใน callback_data ของปุ่ม Telegram ซึ่งจำกัด 64 ไบต์
+#    ใช้ตัวอังกฤษสั้นๆ ไม่มีช่องว่าง — validate_company_accounts() ตรวจให้ตอนบูต
 COMPANY_ACCOUNTS = {
-    "SCB-CP":      "284-252-511-1",     # 1
-    "BAY-CKB":     "778-157-9298",      # 2
-    "KB-CKB":      "227-292-2872",      # 3
-    "KB-CKB97726": "234-849-7726",      # 4
-    "KKP-Jak":     "208-623-9349",      # 5
-    "GSB-Jak":     "020-481-91980-9",   # 6
-    "BBL-Ploy":    "158-418-130-7",     # 7
-    "GSB-Ativit":  "020-470-2987-77",   # 8
-    "KKP-LS":      "205-260-2984",      # 9
-    "TTB-Nat":     "924-758-0914",      # 10
-    "GSB-Teera":   "020-487-546-523",   # 11
-    "KB-BS":       "220-815-0009",      # 12
-    "GSB-Yo":      "020-434-9388-72",   # 13
-    "TTB-Yo":      "924-218-5149",      # 14
-    "SCB-Yo":      "156-436-9057",      # 15
-    "TTB-Jak":     "919-256-0010",      # 16
-    "SCB-MT20234": "284-252-0234",      # 17
-    "KB-CP37446":  "227-293-7446",      # 18
-    "KB-CP05761":  "234-850-5761",      # 19
-    "GSB-Mon":     "020-324-245-305",   # 20
-    "BAY-Mon":     "450-185-7393",      # 21
+    "KB-PCM":       "237-251-1844",     # 1  กสิกรไทย  บจก. พชรมน การช่าง
+    "KTB-Lertpong": "795-077-1410",     # 2  กรุงไทย   เลิศพงษ์ รชตธนานันต์
 }
 
 BANK_DROPDOWN_VALUES = sorted(COMPANY_ACCOUNTS)
+
+# callback_data ของปุ่มเลือกบัญชี = "bank_" + รหัสสลิป (สูงสุด 40 ตัว) + "_" + ชื่อบัญชี
+# Telegram รับได้ไม่เกิน 64 ไบต์ ชื่อบัญชีจึงยาวได้ไม่เกิน 64 - 46 = 18 ไบต์
+ACCOUNT_LABEL_MAX_BYTES = 64 - len("bank_") - 40 - len("_")
 
 # ตัวอักษรที่ธนาคาร/EasySlip ใช้ปิดบังหลักที่ไม่เปิดเผย
 _MASK_CHARS = "xX*#"
@@ -78,28 +66,9 @@ ACCOUNT_OWNERS = {
     #
     # ใส่แค่บางส่วนก็พอ ระบบเทียบทีละคำและยอมให้ชื่อบนสลิปถูกย่อ
     # เว้นว่าง = ยังไม่ตรวจบัญชีนั้น (จับคู่ด้วยเลขอย่างเดียวเหมือนเดิม)
-    "SCB-CP":      ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
-    "BAY-CKB":     ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
-    "KB-CKB":      ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
-    "KB-CKB97726": ["บจก. ซีเคบี 1314 ดิจิตอล", "CKB 1314 DIGITAL"],
-    "KKP-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
-    "GSB-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
-    "BBL-Ploy":    ["อุมาพร พงพันสถาพร", "Aumaporn Phongphansataporn"],
-    "GSB-Ativit":  ["อติวิช ฉวีนาค", "Ativit Chahwinak"],
-    "KKP-LS":      ["เลอสรร บุญลือ", "Loesan Bunlue"],
-    "TTB-Nat":     ["ณัฐนิกา", "Nattanika Chipomja"],
-    "GSB-Teera":   ["ธีระ สุเมธีวรากร", "Teera Sumeteewarakorn"],
-    "KB-BS":       ["บจก. บิลท์สเปค", "BUILTSPAC"],
-    "GSB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
-    "TTB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
-    "SCB-Yo":      ["อนุชา สังคะวาจารย์", "Anucha Sangkhawachan"],
-    "TTB-Jak":     ["จักกฤษ วอนเพียร", "Chakkrit Wonphian"],
-    "SCB-MT20234": ["บริษัท มีทอง การช่าง จำกัด", "MEETHONG KARNCHANG"],
-    "KB-CP37446":  ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
-    "KB-CP05761":  ["บจก. ซีเพ้นท์ แอนด์ ออโต้", "C PAINT AND AUTO"],
-    # "Montri" เพิ่มไว้เพราะ มนตรี สะกดอังกฤษได้สองแบบ ถ้าธนาคารใช้แบบไหนก็ผ่าน
-    "GSB-Mon":     ["มนตรี กัมปนาทโกศล", "Montiri Kumpanatkosol", "Montri Kumpanatkosol"],
-    "BAY-Mon":     ["มนตรี กัมปนาทโกศล", "Montiri Kumpanatkosol", "Montri Kumpanatkosol"],
+    # คำนำหน้า/ต่อท้ายนิติบุคคล (บจก. / จำกัด / Co., Ltd.) ระบบตัดทิ้งก่อนเทียบอยู่แล้ว
+    "KB-PCM":       ["บจก. พชรมน การช่าง", "Phacharamon Kanchaang Co., Ltd."],
+    "KTB-Lertpong": ["เลิศพงษ์ รชตธนานันต์", "Lertpong Rachatathanan"],
 }
 
 
@@ -114,33 +83,15 @@ ACCOUNT_OWNERS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 ACCOUNT_BANKS = {
-    "SCB-CP":      "SCB",
-    "BAY-CKB":     "BAY",
-    "KB-CKB":      "KBANK",
-    "KB-CKB97726": "KBANK",
-    "KKP-Jak":     "KKP",
-    "GSB-Jak":     "GSB",
-    "BBL-Ploy":    "BBL",
-    "GSB-Ativit":  "GSB",
-    "KKP-LS":      "KKP",
-    "TTB-Nat":     "TTB",
-    "GSB-Teera":   "GSB",
-    "KB-BS":       "KBANK",
-    "GSB-Yo":      "GSB",
-    "TTB-Yo":      "TTB",
-    "SCB-Yo":      "SCB",
-    "TTB-Jak":     "TTB",
-    "SCB-MT20234": "SCB",
-    "KB-CP37446":  "KBANK",
-    "KB-CP05761":  "KBANK",
-    "GSB-Mon":     "GSB",
-    "BAY-Mon":     "BAY",
+    "KB-PCM":       "KBANK",
+    "KTB-Lertpong": "KTB",
 }
 
 # ชื่อ/รหัสที่ธนาคารกับ EasySlip ใช้เรียกตัวเอง -> รหัสกลางที่เราใช้
 # ใส่ทั้งรหัสตัวเลข ตัวย่ออังกฤษ และชื่อไทย เพราะแต่ละสลิปส่งมาไม่เหมือนกัน
 _BANK_ALIASES = {
-    # ธนาคารที่เราถือบัญชีอยู่
+    # ต้องรู้จักทุกธนาคาร ไม่ใช่แค่ธนาคารที่เราถือบัญชี (ตอนนี้ถือ KBANK กับ KTB)
+    # ธนาคารที่ไม่รู้จัก = "ตอบไม่ได้" = ด่านธนาคารปล่อยผ่าน
     "scb": "SCB", "014": "SCB", "siamcommercialbank": "SCB", "ไทยพาณิชย์": "SCB",
     "kbank": "KBANK", "004": "KBANK", "kasikornbank": "KBANK", "กสิกรไทย": "KBANK",
     "bay": "BAY", "025": "BAY", "krungsri": "BAY", "bankofayudhya": "BAY",
@@ -151,7 +102,6 @@ _BANK_ALIASES = {
     "bbl": "BBL", "002": "BBL", "bangkokbank": "BBL", "กรุงเทพ": "BBL",
     "ttb": "TTB", "011": "TTB", "tmbthanachart": "TTB", "tmb": "TTB",
     "ทหารไทยธนชาต": "TTB", "ทีเอ็มบีธนชาต": "TTB",
-    # ธนาคารที่เราไม่ได้ถือบัญชี — รู้จักไว้เพื่อฟันธงได้ว่า "คนละธนาคารแน่ๆ"
     "ktb": "KTB", "006": "KTB", "krungthai": "KTB", "กรุงไทย": "KTB",
     "baac": "BAAC", "034": "BAAC", "ธกส": "BAAC", "เพื่อการเกษตร": "BAAC",
     "ghb": "GHB", "033": "GHB", "อาคารสงเคราะห์": "GHB",
@@ -389,6 +339,26 @@ def validate_company_accounts() -> list[str]:
     for name, digits in sorted(accounts.items()):
         if len(digits) < 10:
             problems.append(f"{name}: เลขบัญชี {digits} สั้นผิดปกติ ({len(digits)} หลัก)")
+
+    for name in sorted(COMPANY_ACCOUNTS):
+        # ป้ายยาวเกิน = Telegram ปฏิเสธทั้งแป้นปุ่ม แอดมินจะเลือกบัญชีไม่ได้เลยสักใบ
+        size = len(name.encode("utf-8"))
+        if size > ACCOUNT_LABEL_MAX_BYTES:
+            problems.append(
+                f"{name}: ชื่อบัญชียาว {size} ไบต์ เกิน {ACCOUNT_LABEL_MAX_BYTES} "
+                "ปุ่มเลือกบัญชีจะส่งไม่ออก"
+            )
+        if name != name.strip() or not name:
+            problems.append(f"{name!r}: ชื่อบัญชีมีช่องว่างหัวท้าย จะไม่ตรงกับ dropdown ในชีท")
+
+        # ไม่รู้ธนาคาร = ด่านธนาคารเงียบ / ไม่รู้ชื่อ = ด่านชื่อเงียบ เลขที่บังเอิญชนจะหลุดเข้า
+        if not ACCOUNT_BANKS.get(name):
+            problems.append(f"{name}: ยังไม่ได้ระบุธนาคารใน ACCOUNT_BANKS")
+        if not ACCOUNT_OWNERS.get(name):
+            problems.append(f"{name}: ยังไม่ได้ระบุชื่อเจ้าของใน ACCOUNT_OWNERS")
+
+    for name in sorted((set(ACCOUNT_BANKS) | set(ACCOUNT_OWNERS)) - set(COMPANY_ACCOUNTS)):
+        problems.append(f"{name}: มีใน ACCOUNT_BANKS/ACCOUNT_OWNERS แต่ไม่มีใน COMPANY_ACCOUNTS")
 
     return problems
 

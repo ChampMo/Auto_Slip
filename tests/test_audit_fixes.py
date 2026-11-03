@@ -87,10 +87,10 @@ def status_of(batch_id):
 
 print("=== ข้อ 15: ใช้เลขบัญชีจับคู่ ไม่ใช่รหัสธนาคาร ===")
 # bank.code คือรหัสธนาคาร คนละความหมายกับเลขบัญชี ห้ามเอามาจับคู่
-recv = {"bank": {"code": "1234", "account": "XXX-X-XX298-4"}}
+recv = {"bank": {"code": "1234", "account": "XXX-X-XX184-4"}}
 check("ใช้เลขบัญชีจับคู่ ไม่สนใจ code",
-      match_company_account(get_receiver_account_value(recv))[0], "KKP-LS")
-check("  ดึงเลขบัญชีดิบออกมาได้", get_receiver_account_value(recv), "XXX-X-XX298-4")
+      match_company_account(get_receiver_account_value(recv))[0], "KB-PCM")
+check("  ดึงเลขบัญชีดิบออกมาได้", get_receiver_account_value(recv), "XXX-X-XX184-4")
 check("  ไม่มีเลขบัญชี -> ไม่จับคู่ให้",
       match_company_account(get_receiver_account_value({"bank": {"code": "1234"}}))[1], "no_account")
 check("  code เอาไว้แสดงผลเท่านั้น",
@@ -150,7 +150,7 @@ async def flow_tests():
         time.sleep(0.12)          # จำลอง EasySlip ตอบช้า (โค้ด blocking)
         return {
             "success": True, "amount": 400.0, "payload_amount": 400.0,
-            "sender": "นาย ดุลยฤทธิ์ ส", "receiver": "KKP-LS",
+            "sender": "นาย ดุลยฤทธิ์ ส", "receiver": "KB-PCM",
             "receiver_bank_code": "2984", "receiver_bank_matches": True,
             "transfer_at": _dt(2026, 8, 9, 0, 18, tzinfo=_tz(_td(hours=7))),
             "raw_data": {"x": 1},

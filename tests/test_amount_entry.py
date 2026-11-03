@@ -222,10 +222,10 @@ async def main():
 
     print("\n=== เลือกธนาคารแล้ว -> ยอดที่พิมพ์ต้องลงชีท ===")
     GROUP_BOT.closed.clear()
-    await press("bank_amt1_KKP-LS")
+    await press("bank_amt1_KB-PCM")
     check("เขียนลงชีท 1 แถว", len(sheet_writes), 1)
     check("  ใช้ยอดที่แอดมินพิมพ์", sheet_writes[0]["amount"], 1500.0)
-    check("  ใช้ธนาคารที่เลือก", sheet_writes[0]["bank"], "KKP-LS")
+    check("  ใช้ธนาคารที่เลือก", sheet_writes[0]["bank"], "KB-PCM")
     check("  สถานะจบเป็น Receive", slip("amt1").status, "Receive")
 
     print("\n=== จบแล้ว ปุ่มบนข้อความตรวจสอบใบเดิมต้องหายไป ===")
@@ -306,7 +306,7 @@ async def main():
     check("  สถานะเป็น Reject", slip("amt9").status, "Reject")
 
     print("\n=== กดบนข้อความตรวจสอบเอง -> ไม่ต้องสั่งปิดซ้ำ ===")
-    new_slip("amt10", chat_amount=100.0, receiver_account="KKP-LS", review_msg_id="888")
+    new_slip("amt10", chat_amount=100.0, receiver_account="KB-PCM", review_msg_id="888")
     GROUP_BOT.closed.clear()
     review_message = FakeMessage(CHAT, msg_id=888)
     writes_before = len(sheet_writes)
@@ -315,7 +315,7 @@ async def main():
     check("  ยังบันทึกลงชีทตามปกติ", len(sheet_writes) - writes_before, 1)
 
     print("\n=== ไม่รู้ว่าปุ่มอยู่ข้อความไหน -> ข้ามไป ไม่พัง ===")
-    new_slip("amt11", chat_amount=100.0, receiver_account="KKP-LS", review_msg_id=None)
+    new_slip("amt11", chat_amount=100.0, receiver_account="KB-PCM", review_msg_id=None)
     GROUP_BOT.closed.clear()
     await press("receive_amt11")
     check("ไม่สั่งปิดอะไร", GROUP_BOT.closed, [])

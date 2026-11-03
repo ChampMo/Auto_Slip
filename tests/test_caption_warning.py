@@ -60,7 +60,7 @@ def fake_verify_slip(payload):
         "amount": SLIP_AMOUNTS[payload],
         "payload_amount": SLIP_AMOUNTS[payload],
         "sender": "นาย ดุลยฤทธิ์ ส",
-        "receiver": "KKP-LS",
+        "receiver": "KB-PCM",
         "receiver_bank_code": "2984",
         "receiver_bank_matches": True,
         "transfer_at": _dt(2026, 8, 9, 0, 18, tzinfo=_tz(_td(hours=7))),

@@ -125,7 +125,7 @@ async def main():
     print("=== เตรียมข้อมูล ===")
     make_slip("b_ok", 500, "Receive", chat_trans_id="0000123", chat_fullname="ดุลยฤทธิ์",
               chat_amount=400.0, api_total_amount=400.0, sender_names="นาย ดุลยฤทธิ์ ส",
-              receiver_account="KKP-LS", transfer_time_text="0:18", created=inside_today())
+              receiver_account="KB-PCM", transfer_time_text="0:18", created=inside_today())
     make_slip("b_wait", 501, "pending", chat_trans_id="0000124", chat_amount=1000.0,
               created=inside_today())
     make_slip("b_stuck", 502, "interrupted", chat_user_id="benz4455", chat_amount=250.0,
@@ -141,10 +141,10 @@ async def main():
     msg = await run(cmds.status_command, APPROVER, reply_to_id=500)
     check("บอกสถานะ", "✅ Received" in msg.last, True)
     check("  แสดงข้อมูลที่แชทแจ้ง", "ID: 0000123" in msg.last and "400.00 THB" in msg.last, True)
-    check("  แสดงข้อมูลจากสลิป", "นาย ดุลยฤทธิ์ ส" in msg.last and "KKP-LS" in msg.last, True)
+    check("  แสดงข้อมูลจากสลิป", "นาย ดุลยฤทธิ์ ส" in msg.last and "KB-PCM" in msg.last, True)
     # เทียบสลิปกับแชทให้เห็นเหมือนตอนที่บอทถามในกลุ่ม ไม่ใช่แค่ทิ้งค่าไว้สองบรรทัด
     check("  กางผลตรวจแบบเดียวกับตอนถาม", "✅ Name" in msg.last and "✅ Amount" in msg.last
-          and "✅ Account KKP-LS" in msg.last, True)
+          and "✅ Account KB-PCM" in msg.last, True)
     # เวลาโอนคือเวลาที่เงินออกจริง คนละอย่างกับเวลาที่กดบันทึก
     check("  แสดงเวลาโอนจากสลิป", "Transferred at: 0:18" in msg.last, True)
     # ใบเก่าที่บันทึกไว้ก่อนระบบเก็บเวลา ต้องไม่ขึ้นบรรทัดนี้ค้างไว้เฉยๆ

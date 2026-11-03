@@ -205,6 +205,27 @@ class GoogleSheetsService:
     SUMMARY_ACCOUNT_DROPDOWN_VALUES = ["P", "G", "B", "T", "N", "Y"]
     SUMMARY_BANK_DROPDOWN_VALUES = BANK_DROPDOWN_VALUES
 
+    # ช่องหัวตารางที่ไว้ใส่ชื่อบัญชี คือ T1:AJ1 (17 ช่อง) — เกินจากนี้จะล้นไปทับ AK ที่เป็นตารางสรุป
+    HEADER_ACCOUNT_SLOTS = 17
+    # ตารางสรุปถอน AP3:AP18 (16 แถว) และตารางสรุปฝาก AU3:AU9 (7 แถว) ก่อนถึงแถวยอดรวม
+    WITHDRAW_SUMMARY_ROWS = 16
+    DEPOSIT_SUMMARY_ROWS = 7
+
+    @staticmethod
+    def _fit_accounts(accounts, slots: int, where: str) -> list:
+        """บัญชีที่ใส่ลงช่องที่มีจำกัด เติมช่องว่างให้ครบ และเตือนถ้าใส่ไม่พอ
+
+        ห้ามปล่อยให้ล้น เพราะช่องถัดไปเป็นแถวยอดรวม/ตารางอื่น ถ้าทับเข้าไปยอดสรุปจะผิดเงียบๆ
+        """
+        values = list(accounts)
+        if len(values) > slots:
+            logger.warning(
+                "Too many accounts for %s: %d accounts, room for %d — dropped %s",
+                where, len(values), slots, values[slots:],
+            )
+            values = values[:slots]
+        return values + [""] * (slots - len(values))
+
     BASE_CELL_STYLE = {
         "borders": {
             "top": {"style": "SOLID"},
@@ -305,7 +326,7 @@ class GoogleSheetsService:
                 "showCustomUi": True,
             }
 
-            # Agent columns for inserted data rows: N and R (0-based idx 13 and 17)
+            # คอลัมน์ "บัญชี" ของแถวที่เพิ่งเขียน: O (VIP WE) และ S (VIP 12) — 0-based idx 14 และ 18
             dropdown_ranges = [
                 {
                     "sheetId": sheet_id,
@@ -367,8 +388,9 @@ class GoogleSheetsService:
                     "setDataValidation": {
                         "range": {
                             "sheetId": sheet_id,
+                            # AP3:AP18 ครบทุกแถวบัญชีของตารางถอน
                             "startRowIndex": 2,
-                            "endRowIndex": 17,
+                            "endRowIndex": 2 + self.WITHDRAW_SUMMARY_ROWS,
                             "startColumnIndex": 41,
                             "endColumnIndex": 42,
                         },
@@ -379,8 +401,9 @@ class GoogleSheetsService:
                     "setDataValidation": {
                         "range": {
                             "sheetId": sheet_id,
+                            # AU3:AU9 ครบทุกแถวบัญชีของตารางฝาก
                             "startRowIndex": 2,
-                            "endRowIndex": 7,
+                            "endRowIndex": 2 + self.DEPOSIT_SUMMARY_ROWS,
                             "startColumnIndex": 46,
                             "endColumnIndex": 47,
                         },
@@ -651,51 +674,65 @@ class GoogleSheetsService:
             ],
         ]
 
+        # ชื่อบัญชีในตารางสรุปมาจากรายการเดียวกับ dropdown เสมอ
+        # (เคยพิมพ์ชื่อตายตัวไว้ แล้วชื่อไม่ตรงกับ dropdown เช่น KB-CP / SCB-MT ยอดจึงเป็น 0 เงียบๆ)
+        #
+        # แถวที่ยังไม่มีชื่อบัญชีต้องได้ 0 — SUMIF ที่เงื่อนไขว่างจะไปนับแถวที่ช่องบัญชีว่าง
+        # ซึ่งไม่ใช่ยอดของบัญชีไหนเลย ยอดสรุปจะเพี้ยน
+        withdraw_accounts = self._fit_accounts(
+            self.SUMMARY_BANK_DROPDOWN_VALUES, self.WITHDRAW_SUMMARY_ROWS, "withdraw summary AP")
         bank_table = [
             ["สรุปยอดเงินโอนออกทั้งหมด / แยกบัญชี (Withdraw)", "", "", "", ""],
             ["Bank", "We88", "12T", "Uwin THB", "Total"],
-
-            ["SCB-CP", "=SUMIF(D:D,AP3,B:B)", "=SUMIF(H:H,AP3,F:F)", "=SUMIF(K:K,AP3,I:I)", "=SUM(AQ3:AS3)"],
-            ["KB-CP", "=SUMIF(D:D,AP4,B:B)", "=SUMIF(H:H,AP4,F:F)", "=SUMIF(K:K,AP4,I:I)", "=SUM(AQ4:AS4)"],
-            ["BAY-CKB", "=SUMIF(D:D,AP5,B:B)", "=SUMIF(H:H,AP5,F:F)", "=SUMIF(K:K,AP5,I:I)", "=SUM(AQ5:AS5)"],
-            ["KB-CKB", "=SUMIF(D:D,AP6,B:B)", "=SUMIF(H:H,AP6,F:F)", "=SUMIF(K:K,AP6,I:I)", "=SUM(AQ6:AS6)"],
-            ["KKP-Jak", "=SUMIF(D:D,AP7,B:B)", "=SUMIF(H:H,AP7,F:F)", "=SUMIF(K:K,AP7,I:I)", "=SUM(AQ7:AS7)"],
-            ["GSB-Jak", "=SUMIF(D:D,AP8,B:B)", "=SUMIF(H:H,AP8,F:F)", "=SUMIF(K:K,AP8,I:I)", "=SUM(AQ8:AS8)"],
-            ["BBL-Ploy", "=SUMIF(D:D,AP9,B:B)", "=SUMIF(H:H,AP9,F:F)", "=SUMIF(K:K,AP9,I:I)", "=SUM(AQ9:AS9)"],
-            ["GSB-Ativit", "=SUMIF(D:D,AP10,B:B)", "=SUMIF(H:H,AP10,F:F)", "=SUMIF(K:K,AP10,I:I)", "=SUM(AQ10:AS10)"],
-            ["KKP-Yo", "=SUMIF(D:D,AP11,B:B)", "=SUMIF(H:H,AP11,F:F)", "=SUMIF(K:K,AP11,I:I)", "=SUM(AQ11:AS11)"],
-            ["TTB-Yo", "=SUMIF(D:D,AP12,B:B)", "=SUMIF(H:H,AP12,F:F)", "=SUMIF(K:K,AP12,I:I)", "=SUM(AQ12:AS12)"],
-            ["SCB-Yo", "=SUMIF(D:D,AP13,B:B)", "=SUMIF(H:H,AP13,F:F)", "=SUMIF(K:K,AP13,I:I)", "=SUM(AQ13:AS13)"],
-            ["GSB-Yo", "=SUMIF(D:D,AP14,B:B)", "=SUMIF(H:H,AP14,F:F)", "=SUMIF(K:K,AP14,I:I)", "=SUM(AQ14:AS14)"],
-            ["KB-CKBกระแส", "=SUMIF(D:D,AP15,B:B)", "=SUMIF(H:H,AP15,F:F)", "=SUMIF(K:K,AP15,I:I)", "=SUM(AQ15:AS15)"],
-            ["KB-CPกระแส", "=SUMIF(D:D,AP16,B:B)", "=SUMIF(H:H,AP16,F:F)", "=SUMIF(K:K,AP16,I:I)", "=SUM(AQ16:AS16)"],
-            ["KKP-LS", "=SUMIF(D:D,AP17,B:B)", "=SUMIF(H:H,AP17,F:F)", "=SUMIF(K:K,AP17,I:I)", "=SUM(AQ17:AS17)"],
-            ["", "=SUMIF(D:D,AP18,B:B)", "=SUMIF(H:H,AP18,F:F)", "=SUMIF(K:K,AP18,I:I)", "=SUM(AQ18:AS18)"],
-            ["ถอนเงินออกทั้งหมด", "=SUM(AQ3:AQ18)", "=SUM(AR3:AR18)", "=SUM(AS3:AS18)", "=SUM(AT3:AT18)"],
         ]
+        for offset, account in enumerate(withdraw_accounts):
+            r = 3 + offset
+            bank_table.append([
+                account,
+                f'=IF(AP{r}="",0,SUMIF(D:D,AP{r},B:B))',
+                f'=IF(AP{r}="",0,SUMIF(H:H,AP{r},F:F))',
+                f'=IF(AP{r}="",0,SUMIF(K:K,AP{r},I:I))',
+                f"=SUM(AQ{r}:AS{r})",
+            ])
+        last = 2 + self.WITHDRAW_SUMMARY_ROWS
+        bank_table.append([
+            "ถอนเงินออกทั้งหมด",
+            f"=SUM(AQ3:AQ{last})", f"=SUM(AR3:AR{last})",
+            f"=SUM(AS3:AS{last})", f"=SUM(AT3:AT{last})",
+        ])
 
+        deposit_accounts = self._fit_accounts(
+            self.SUMMARY_BANK_DROPDOWN_VALUES, self.DEPOSIT_SUMMARY_ROWS, "deposit summary AU")
         deposit_table = [
             ["สรุปยอดเงินโอนเข้าทั้งหมด / แยกบัญชี (Deposit)", "", "", "", "", "", "", "", ""],
             ["บัญชี", "We88", "12T", "", "Total", "We88", "12T", "", "Total"],
-            ["SCB-CP", "=SUMIF(O:O,AU3,M:M)", "=SUMIF(S:S,AU3,Q:Q)", "", "=SUM(AV3:AW3)", "=COUNTIF(O:O,AU3)", "=COUNTIF(S:S,AU3)", "", "=SUM(AZ3:BA3)"],
-            ["SCB-MT", "=SUMIF(O:O,AU4,M:M)", "=SUMIF(S:S,AU4,Q:Q)", "", "=SUM(AV4:AW4)", "=COUNTIF(O:O,AU4)", "=COUNTIF(S:S,AU4)", "", "=SUM(AZ4:BA4)"],
-            ["GSB-Yo", "=SUMIF(O:O,AU5,M:M)", "=SUMIF(S:S,AU5,Q:Q)", "", "=SUM(AV5:AW5)", "=COUNTIF(O:O,AU5)", "=COUNTIF(S:S,AU5)", "", "=SUM(AZ5:BA5)"],
-            ["TTB-Yo", "=SUMIF(O:O,AU6,M:M)", "=SUMIF(S:S,AU6,Q:Q)", "", "=SUM(AV6:AW6)", "=COUNTIF(O:O,AU6)", "=COUNTIF(S:S,AU6)", "", "=SUM(AZ6:BA6)"],
-            ["SCB-Yo", "=SUMIF(O:O,AU7,M:M)", "=SUMIF(S:S,AU7,Q:Q)", "", "=SUM(AV7:AW7)", "=COUNTIF(O:O,AU7)", "=COUNTIF(S:S,AU7)", "", "=SUM(AZ7:BA7)"],
-            ["", 0, 0, "", 0, 0, 0, "", 0],
-            ["", 0, 0, "", 0, 0, 0, "", 0],
-            [
-                "ยอดเงินเข้าทั้งหมด",
-                "=SUM(AV3:AV9)",
-                "=SUM(AW3:AW9)",
-                "",
-                "=SUM(AY3:AY9)",
-                "=SUM(AZ3:AZ9)",
-                "=SUM(BA3:BA7)",
-                "",
-                "=SUM(BC3:BC7)"
-            ],
         ]
+        for offset, account in enumerate(deposit_accounts):
+            r = 3 + offset
+            deposit_table.append([
+                account,
+                f'=IF(AU{r}="",0,SUMIF(O:O,AU{r},M:M))',
+                f'=IF(AU{r}="",0,SUMIF(S:S,AU{r},Q:Q))',
+                "",
+                f"=SUM(AV{r}:AW{r})",
+                f'=IF(AU{r}="",0,COUNTIF(O:O,AU{r}))',
+                f'=IF(AU{r}="",0,COUNTIF(S:S,AU{r}))',
+                "",
+                f"=SUM(AZ{r}:BA{r})",
+            ])
+        last = 2 + self.DEPOSIT_SUMMARY_ROWS
+        # เดิมสองช่องท้ายรวมแค่ถึงแถว 7 ทำให้บัญชีในแถว 8-9 ไม่ถูกนับในยอดรวม
+        deposit_table.append([
+            "ยอดเงินเข้าทั้งหมด",
+            f"=SUM(AV3:AV{last})",
+            f"=SUM(AW3:AW{last})",
+            "",
+            f"=SUM(AY3:AY{last})",
+            f"=SUM(AZ3:AZ{last})",
+            f"=SUM(BA3:BA{last})",
+            "",
+            f"=SUM(BC3:BC{last})",
+        ])
 
         max_rows = max(len(summary), len(bank_table), len(deposit_table))
 
@@ -769,8 +806,9 @@ class GoogleSheetsService:
             "Trans ID", "VIP 12 รับ P", "Time", "บัญชี",
         ]
         
-        # เพิ่มค่าธนาคารจาก BANK_DROPDOWN_VALUES
-        headers.extend(BANK_DROPDOWN_VALUES)
+        # เพิ่มชื่อบัญชีลง T1:AJ1 — จำกัดจำนวนไว้ ไม่ให้ล้นไปทับหัวตารางสรุปที่ AK1
+        headers.extend(self._fit_accounts(
+            BANK_DROPDOWN_VALUES, self.HEADER_ACCOUNT_SLOTS, "header T1:AJ1"))
         logger.info("📊 Sheet headers (after bank values): %s", headers)
 
         while len(headers) < 55:

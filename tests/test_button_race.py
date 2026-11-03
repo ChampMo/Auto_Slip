@@ -146,28 +146,45 @@ async def main():
     sheet_writes.clear()
     new_slip("race1")
     await press("receive_race1", ADMIN_A)             # A กด Receive -> ขึ้นปุ่มเลือกธนาคาร
-    a = await press("bank_race1_KKP-LS", ADMIN_A)     # A เลือก KKP-LS
-    b = await press("bank_race1_SCB-CP", ADMIN_B)     # B เลือก SCB-CP ตามมาติดๆ
+    a = await press("bank_race1_KB-PCM", ADMIN_A)     # A เลือก KB-PCM
+    b = await press("bank_race1_KTB-Lertpong", ADMIN_B)     # B เลือก KTB-Lertpong ตามมาติดๆ
     check("A บันทึกสำเร็จ", "✅ Received" in a.last_text, True)
     check("  B ถูกปฏิเสธ", "Already received" in b.last_text, True)
     check("  เขียนชีทครั้งเดียว", len(sheet_writes), 1)
-    check("  ชีทได้ธนาคารของ A", sheet_writes[0]["bank"], "KKP-LS")
-    check("  DB ไม่ถูกเขียนทับเป็นของ B", bank_of("race1"), "KKP-LS")
+    check("  ชีทได้ธนาคารของ A", sheet_writes[0]["bank"], "KB-PCM")
+    check("  DB ไม่ถูกเขียนทับเป็นของ B", bank_of("race1"), "KB-PCM")
 
     print("\n=== ช่องโหว่ 2: Reject แล้ว แต่ปุ่มธนาคารยังค้างบนจออีกคน ===")
     sheet_writes.clear()
     new_slip("race2")
     await press("receive_race2", ADMIN_A)             # A กด Receive -> ได้ปุ่มธนาคาร
     r = await press("reject_race2", ADMIN_B)          # B กด Reject ตัดหน้า
-    late = await press("bank_race2_KKP-LS", ADMIN_A)  # A เพิ่งกดธนาคารจากปุ่มที่ค้างอยู่
+    late = await press("bank_race2_KB-PCM", ADMIN_A)  # A เพิ่งกดธนาคารจากปุ่มที่ค้างอยู่
     check("B ปฏิเสธสำเร็จ", "❌ Rejected" in r.last_text, True)
     check("  ปุ่มธนาคารที่ค้างถูกบล็อก", "Already rejected" in late.last_text, True)
     check("  ไม่มีการเขียนลงชีทเลย", len(sheet_writes), 0)
     check("  สถานะยังเป็น Reject", status_of("race2"), "Reject")
 
+    print("\n=== ปุ่มบัญชีที่เลิกใช้แล้ว (ค้างจากก่อนรีสตาร์ท) หรือ callback ปลอม ===")
+    sheet_writes.clear()
+    new_slip("stale1")
+    await press("receive_stale1", ADMIN_A)
+    stale = await press("bank_stale1_SCB-CP", ADMIN_A)   # บัญชีเดิมที่ถูกถอดออกแล้ว
+    check("ไม่บันทึกลงชีท", len(sheet_writes), 0)
+    check("  สถานะยังรอตัดสิน ไม่ถูกจองไว้", status_of("stale1"), "pending")
+    check("  บอกให้เลือกใหม่", any("no longer in the list" in a for a in stale.alerts), True)
+    check("  แสดงปุ่มบัญชีชุดใหม่ให้", len(stale.markups), 1)
+    forged = await press("bank_stale1_=HYPERLINK(\"x\")", ADMIN_A)
+    check("  ค่าแปลกปลอมก็ไม่ถูกเขียน", len(sheet_writes), 0)
+    check("  ค่าแปลกปลอมไม่ลง DB", bank_of("stale1"), None)
+    ok = await press("bank_stale1_KTB-Lertpong", ADMIN_A)
+    check("  เลือกบัญชีที่มีจริงแล้วบันทึกได้", "✅ Received" in ok.last_text, True)
+    check("  ชีทได้บัญชีที่เลือก", sheet_writes[0]["bank"] if sheet_writes else None, "KTB-Lertpong")
+    del forged
+
     print("\n=== กดปุ่มเดิมรัวๆ (บัญชีรู้อยู่แล้ว) ===")
     sheet_writes.clear()
-    new_slip("race3", receiver_account="KKP-LS")
+    new_slip("race3", receiver_account="KB-PCM")
     first = await press("receive_race3")
     second = await press("receive_race3")
     third = await press("receive_race3")
@@ -178,7 +195,7 @@ async def main():
 
     print("\n=== Reject ชนกับ Receive ===")
     sheet_writes.clear()
-    new_slip("race4", receiver_account="KKP-LS")
+    new_slip("race4", receiver_account="KB-PCM")
     rej = await press("reject_race4")
     rec = await press("receive_race4")
     check("Reject มาก่อน ชนะ", status_of("race4"), "Reject")

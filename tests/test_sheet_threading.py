@@ -111,7 +111,7 @@ def entry(batch_id, category="VIP_WE", trans_id=None):
         batch_id=batch_id, category=category, status="Receive",
         chat_trans_id=trans_id or batch_id, chat_fullname=None, sender_names=None,
         chat_amount=400.0, api_total_amount=400.0,
-        receiver_account="KKP-LS", chat_bank=None,
+        receiver_account="KB-PCM", chat_bank=None,
     )
 
 
@@ -122,7 +122,7 @@ with SessionLocal() as db:
         chat_id="-100222", msg_id="1", chat_trans_id="0009",
         chat_fullname="ดุลยฤทธิ์", sender_names="นาย ดุลยฤทธิ์ ส",
         chat_amount=100.0, api_total_amount=400.0,
-        receiver_account="KKP-LS", chat_bank="SCB-CP",
+        receiver_account="KB-PCM", chat_bank="KTB-Lertpong",
     ))
     db.commit()
     txn = db.query(Transaction).filter(Transaction.batch_id == "snap1").first()
@@ -130,7 +130,7 @@ with SessionLocal() as db:
 
 check("คัดลอกครบทุกฟิลด์", (snap.batch_id, snap.category, snap.status), ("snap1", "VIP_12", "Receive"))
 check("  ยอดจาก API", snap.api_total_amount, 400.0)
-check("  บัญชีผู้รับ", snap.receiver_account, "KKP-LS")
+check("  บัญชีผู้รับ", snap.receiver_account, "KB-PCM")
 check("  แก้ค่าไม่ได้ (frozen)", isinstance(snap, SheetEntry) and hasattr(snap, "__dataclass_fields__"), True)
 # ปิด session แล้วยังอ่านค่าได้ = ไม่ผูกกับ session อีกต่อไป
 check("  session ปิดแล้วยังใช้ได้", snap.chat_fullname, "ดุลยฤทธิ์")
@@ -224,7 +224,7 @@ def entry_without_id(batch_id, amount, category="VIP_WE", user_id=None):
         batch_id=batch_id, category=category, status="Receive",
         chat_trans_id=None, chat_fullname=None, sender_names=None,
         chat_amount=amount, api_total_amount=None,
-        receiver_account="KKP-LS", chat_bank=None, chat_user_id=user_id,
+        receiver_account="KB-PCM", chat_bank=None, chat_user_id=user_id,
     )
 
 

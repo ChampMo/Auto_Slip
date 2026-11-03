@@ -168,7 +168,7 @@ gs.get_business_now = lambda: datetime(2026, 8, 4, 0, 30, tzinfo=BANGKOK)
 ok, err = sheets_service.append_to_sheet(SheetEntry(
     batch_id="b1", category="VIP_WE", status="Receive", chat_trans_id="0001",
     chat_fullname=None, sender_names=None, chat_amount=400.0,
-    api_total_amount=400.0, receiver_account="KKP-LS", chat_bank=None,
+    api_total_amount=400.0, receiver_account="KB-PCM", chat_bank=None,
 ))
 check("บันทึกสำเร็จ", ok, True)
 check("  สร้างแท็บของวันใหม่ให้เอง", tabs_of("Deposit-2026/check_08-2026"), ["04-08-2026"])
@@ -177,7 +177,7 @@ def try_write():
     return sheets_service.append_to_sheet(SheetEntry(
         batch_id="b2", category="VIP_WE", status="Receive", chat_trans_id="0002",
         chat_fullname=None, sender_names=None, chat_amount=400.0,
-        api_total_amount=400.0, receiver_account="KKP-LS", chat_bank=None,
+        api_total_amount=400.0, receiver_account="KB-PCM", chat_bank=None,
     ))
 
 
@@ -229,6 +229,60 @@ FOLDERS.add("Deposit-2026")
 ok, err = try_write()
 check("ต้องแจ้ง error ไม่ใช่เขียนเงียบๆ", ok, False)
 check("  บอกว่าไฟล์ไหนหาย", "check_08-2026" in err, True)
+
+print("\n=== หัวตารางและตารางสรุปใช้บัญชีชุดเดียวกับ dropdown ===")
+from services.easyslip import BANK_DROPDOWN_VALUES  # noqa: E402
+
+
+class RecordingWorksheet(FakeWorksheet):
+    """เก็บทุกอย่างที่เขียนลงชีท และทุก dropdown ที่ตั้ง"""
+
+    def __init__(self, title):
+        super().__init__(title)
+        self.writes = {}
+        self.validations = []
+        self.spreadsheet = self
+
+    def update(self, values, range_name=None, **k):
+        self.writes[range_name] = values
+
+    def batch_update(self, body):
+        for req in body.get("requests", []):
+            if "setDataValidation" in req:
+                self.validations.append(req["setDataValidation"])
+
+
+ws = RecordingWorksheet("t")
+sheets_service._write_summary_tables(ws)
+summary = ws.writes["AK1:BC19"]
+withdraw_labels = [row[5] for row in summary[2:18]]
+deposit_labels = [row[10] for row in summary[2:9]]
+check("ตารางถอน (AP) ใช้ชื่อจาก dropdown", [v for v in withdraw_labels if v], BANK_DROPDOWN_VALUES)
+check("  ตารางฝาก (AU) ใช้ชื่อจาก dropdown", [v for v in deposit_labels if v], BANK_DROPDOWN_VALUES)
+check("  ไม่เหลือชื่อบัญชีเก่า",
+      any(v in ("SCB-CP", "KB-CP", "SCB-MT", "KKP-LS", "TTB-Yo")
+          for row in summary for v in row), False)
+check("  แถวยอดรวมถอนอยู่ที่แถว 19", summary[18][5], "ถอนเงินออกทั้งหมด")
+check("  แถวยอดรวมฝากอยู่ที่แถว 10", summary[9][10], "ยอดเงินเข้าทั้งหมด")
+check("  แถวว่างได้ 0 ไม่ไปนับแถวที่ช่องบัญชีว่าง", summary[8][11], '=IF(AU9="",0,SUMIF(O:O,AU9,M:M))')
+check("  ยอดรวมจำนวนรายการฝากนับครบถึงแถว 9", summary[9][16], "=SUM(BA3:BA9)")
+check("  ยอดรวมทั้งหมดฝากนับครบถึงแถว 9", summary[9][18], "=SUM(BC3:BC9)")
+
+bank_values = sorted({
+    v["userEnteredValue"]
+    for rule in ws.validations if rule["range"]["startColumnIndex"] in (41, 46)
+    for v in rule["rule"]["condition"]["values"]
+})
+check("  dropdown ตารางสรุปเป็นบัญชีชุดใหม่", bank_values, sorted(BANK_DROPDOWN_VALUES))
+rows_covered = {rule["range"]["startColumnIndex"]: (rule["range"]["startRowIndex"], rule["range"]["endRowIndex"])
+                for rule in ws.validations}
+check("  dropdown ตารางถอนครอบ AP3:AP18", rows_covered[41], (2, 18))
+check("  dropdown ตารางฝากครอบ AU3:AU9", rows_covered[46], (2, 9))
+
+check("ใส่บัญชีเกินช่อง -> ตัดออก ไม่ล้นไปทับตารางอื่น",
+      sheets_service._fit_accounts(["a", "b", "c"], 2, "test"), ["a", "b"])
+check("  ขาด -> เติมช่องว่างให้ครบ",
+      sheets_service._fit_accounts(["a"], 3, "test"), ["a", "", ""])
 
 print("\nRESULT:", "ALL PASS" if failed == 0 else f"{failed} FAILED")
 sys.exit(1 if failed else 0)
