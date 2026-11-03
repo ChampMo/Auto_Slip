@@ -112,11 +112,14 @@ class SheetEntry:
     # เวลาโอนตามสลิป พร้อมเขียนลงช่อง Time ได้เลย เช่น "0:18" หรือ "0:18, 0:37"
     # ว่าง = ไม่รู้เวลาโอน ให้ใช้เวลาที่บันทึกแทนเพื่อไม่ให้ช่องโล่ง
     transfer_time_text: str | None = None
+    # ชื่อผู้ใช้จาก caption ใช้เป็นตัวระบุสำรองเมื่อไม่มีทั้ง Trans ID และชื่อผู้โอน
+    chat_user_id: str | None = None
 
     @classmethod
     def from_transaction(cls, txn) -> "SheetEntry":
         return cls(
             transfer_time_text=txn.transfer_time_text,
+            chat_user_id=txn.chat_user_id,
             batch_id=txn.batch_id,
             category=txn.category,
             status=txn.status,
@@ -823,11 +826,17 @@ class GoogleSheetsService:
                 formatted_time = (entry.transfer_time_text or "").strip() or format_clock(now)
 
                 # Trans ID: caption -> ชื่อผู้ส่งจากสลิป -> ชื่อผู้ส่งที่แจ้งมาในแชท (กรณีอ่านสลิปไม่ออก)
+                # -> ชื่อผู้ใช้ใน caption -> "-"
+                #
+                # ⚠️ ช่องนี้ห้ามว่างเด็ดขาด เพราะเราหาแถวถัดไปจากความยาวของคอลัมน์นี้
+                # (col_values ตัดช่องว่างท้ายคอลัมน์ทิ้ง) ถ้าปล่อยว่าง
+                # สลิปใบถัดไปของกลุ่มเดียวกันจะได้เลขแถวเดิม แล้วเขียนทับยอดของใบนี้หายไปจากชีท
                 trans_identifier = (
                     entry.chat_trans_id
                     or get_first_names(entry.sender_names)
                     or get_first_names(entry.chat_fullname)
-                    or ""
+                    or entry.chat_user_id
+                    or "-"
                 )
 
                 # แปลงยอดเงินเป็น float

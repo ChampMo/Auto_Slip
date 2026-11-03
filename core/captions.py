@@ -22,6 +22,11 @@ CURRENCY_BEFORE = r"(?:THB|THAI\s*BAHT|BAHT|HB|บาท|฿)"
 # ตัวเลขเดี่ยว รองรับคอมมาคั่นหลักพันและทศนิยม
 NUMBER = r"[\d,]+(?:\.\d+)?"
 
+# เครื่องหมายลบ — คีย์บอร์ดมือถือบางรุ่นพิมพ์ขีดออกมาเป็นตัวอื่นที่หน้าตาเหมือนกัน
+# ขีดที่ติดหน้าตัวเลขเลย ("-500") คือยอดติดลบ ไม่ใช่ตัวคั่น ("Amount :- 500")
+MINUS = r"[\-–—−]"
+SIGNED_NUMBER = rf"{MINUS}?{NUMBER}"
+
 
 def _synonym_pattern(label: str) -> str:
     """'TRANS ID' -> 'TRANS\\s*ID' เพื่อให้จับได้ทั้ง 'TRANS ID', 'TRANSID', 'TRANS  ID'"""
@@ -74,13 +79,18 @@ FULLNAME_PATTERN = re.compile(
 # ระหว่างป้ายกับตัวเลข มักมีหน่วยเงินและเครื่องหมายคั่นปนมาได้หลายแบบ
 # เช่น "Amount : THB .- 900" หรือ "Amount: ฿1,500" — ข้ามให้หมดก่อนอ่านตัวเลข
 # แต่ละรอบต้องกินอักขระอย่างน้อย 1 ตัว จึงวนไม่รู้จบไม่ได้
-AMOUNT_NOISE = rf"(?:{H}(?:{CURRENCY_BEFORE}|[.\-–—:]+))*"
+#
+# ⚠️ แต่ละรอบกินเครื่องหมายได้ทีละ 1 ตัวเท่านั้น ห้ามกลับไปใช้ [...]+ ซ้อนใน (...)*
+# เดิมเป็นแบบนั้น จุดยาวๆ ("Amount :....") แบ่งรอบได้หลายแบบจน regex ย้อนลองเป็นทวีคูณ
+# จุด 24 ตัวใช้ 9 วินาที และระหว่างนั้นบอทค้างทั้งตัว
+# ขีดที่ติดหน้าตัวเลขไม่นับเป็นตัวคั่น ปล่อยให้ไปเป็นเครื่องหมายลบของตัวเลขแทน
+AMOUNT_NOISE = rf"(?:{H}(?:{CURRENCY_BEFORE}|[.:]|{MINUS}(?!\d)))*"
 
 # ยอดเงินเป็นกรณีพิเศษ: บางข้อความไม่มี : เลย ("Amount 400 HB")
 # และรองรับการบวก ("100+100 = 200") โดยเก็บทั้งตัวตั้งและผลลัพธ์ที่เขาเขียน
 AMOUNT_PATTERN = re.compile(
     rf"(?im){ANCHOR_ANY}(?:{_labels_pattern(AMOUNT_LABELS)}){H}[:=]?{AMOUNT_NOISE}{H}"
-    rf"({NUMBER}(?:{H}\+{H}{NUMBER})*)"
+    rf"({SIGNED_NUMBER}(?:{H}\+{H}{NUMBER})*)"
     rf"(?:{H}={H}({NUMBER}))?"
 )
 
@@ -134,7 +144,8 @@ def _cut_at_next_label(value: str) -> str:
 def parse_number(text: str):
     """แปลงข้อความเป็นตัวเลข คืน None ถ้าแปลงไม่ได้"""
     try:
-        return float(str(text).replace(",", "").strip())
+        # float() รู้จักแค่ขีดธรรมดา ขีดแบบอื่นต้องแปลงก่อน ไม่งั้น "–500" กลายเป็นอ่านไม่ออก
+        return float(re.sub(MINUS, "-", str(text).replace(",", "").strip()))
     except (TypeError, ValueError):
         return None
 
@@ -143,8 +154,9 @@ def parse_typed_amount(text: str):
     """อ่านยอดที่แอดมินพิมพ์ตอบกลับมาเอง คืน None ถ้าไม่ใช่ยอดที่ใช้ได้
 
     ยอมให้พิมพ์หน่วยติดมาด้วย ("1,500.00 THB") แต่ยอดต้องมากกว่าศูนย์
+    ต้องอ่านเครื่องหมายลบด้วย ไม่งั้น "-5" จะกลายเป็น 5 แล้วผ่านไปลงชีทเงียบๆ
     """
-    match = re.search(NUMBER, str(text or ""))
+    match = re.search(SIGNED_NUMBER, str(text or ""))
     if not match:
         return None
     value = parse_number(match.group(0))

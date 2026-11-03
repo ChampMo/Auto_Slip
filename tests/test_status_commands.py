@@ -228,6 +228,22 @@ async def main():
     msg = await run(cmds.pending_command, OUTSIDER)
     check("  คนนอกดูไม่ได้", "Only approvers" in msg.last, True)
 
+    print("\n=== /pending ในแชทส่วนตัว ตัวเลขต้องตรงกับรายการ ===")
+    # เคยเป็นบั๊ก: ในแชทส่วนตัวรายการโชว์ทุกกลุ่ม แต่หัวข้อนับแค่แชทนี้ เลยขึ้น 0
+    make_slip("b_vip12", 504, "needs_qr", chat_id="-100222", chat_trans_id="0000126",
+              chat_amount=300.0, created=inside_today())
+    msg = await run(cmds.pending_command, APPROVER)
+    check("ในกลุ่ม นับแค่กลุ่มนี้", "⏳ 2 slip(s) waiting" in msg.last, True)
+    check("  ไม่เอาใบของอีกกลุ่ม", "0000126" in msg.last, False)
+    msg = await run(cmds.pending_command, APPROVER, chat_id="111")
+    check("  แชทส่วนตัว นับทุกกลุ่ม", "⏳ 3 slip(s) waiting" in msg.last, True)
+    check("  แชทส่วนตัว เห็นใบของทุกกลุ่ม",
+          all(text in msg.last for text in ("0000124", "benz4455", "0000126")), True)
+    check("  ไม่ขึ้นว่ามีเหลืออีก", "more." in msg.last, False)
+    with SessionLocal() as db:
+        db.query(Transaction).filter(Transaction.batch_id == "b_vip12").delete()
+        db.commit()
+
     print("\n=== /today ===")
     msg = await run(cmds.today_command, APPROVER)
     check("นับของวันนี้", "Received  1" in msg.last, True)

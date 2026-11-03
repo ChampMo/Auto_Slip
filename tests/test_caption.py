@@ -207,6 +207,47 @@ check_caption("  ป้ายไทย", "ยอดเงิน: 900", amount=90
 check_caption("  ใช้ = แทน :", "Amount = 750", amount=750.0)
 check_caption("  มีสัญลักษณ์บาท", "Amount: ฿1,500", amount=1500.0)
 
+print("\n=== ยอดติดลบ ห้ามกลายเป็นยอดบวก ===")
+# เคยเป็นบั๊ก: ขีดหน้าตัวเลขถูกข้ามไปเป็นตัวคั่น "-500" เลยอ่านได้ 500 แบบไม่มีคำเตือน
+for label, caption in [
+    ("มีช่องว่างหลัง :", "Amount : -500"),
+    ("  ติด : เลย", "Amount:-500"),
+    ("  มีคอมมาและทศนิยม", "AMOUNT THB : -1,500.00"),
+    ("  ขีดยาว (en dash)", "Amount : –500"),
+    ("  เครื่องหมายลบ unicode", "Amount : −500"),
+    ("  ป้ายไทย", "ยอดเงิน: -900"),
+]:
+    data = extract_data_from_caption(caption)
+    check(f"{label} -> ไม่ถือเป็นยอด", data["amount"], None)
+    check(f"{label} -> ติดธงให้คนดู", "zero or less" in (data["amount_note"] or ""), True)
+
+# ขีดที่ใช้เป็นตัวคั่น (มีช่องว่างก่อนตัวเลข) ยังต้องอ่านเป็นยอดบวกเหมือนเดิม
+check_caption("ขีดเป็นตัวคั่น", "Amount :- 500", amount=500.0, amount_note=None)
+check_caption("  ขีดคั่นมีช่องว่างสองข้าง", "Amount - 500", amount=500.0, amount_note=None)
+check_caption("  หน่วยเงินกับ .- นำหน้า", "Amount : THB .- 900", amount=900.0, amount_note=None)
+check_caption("  .- ต่อท้ายแบบไทย", "ยอด 1,500.-", amount=1500.0, amount_note=None)
+check_caption("  บวกกันยังได้เหมือนเดิม", "Amount: 100+100 = 200", amount=200.0, amount_note=None)
+
+print("\n=== เครื่องหมายยาวๆ ต้องไม่ทำให้บอทค้าง ===")
+# เคยเป็นบั๊ก: จุดหรือ : ยาวๆ หลังป้ายยอดเงิน ทำให้ regex ย้อนลองเป็นทวีคูณ
+# จุด 24 ตัวใช้ 9 วินาที (เพิ่มทีละตัว เวลาคูณสอง) ระหว่างนั้นบอทไม่ตอบใครเลย
+import time  # noqa: E402
+
+for label, caption in [
+    ("จุดยาว", "Amount :" + "." * 200 + "x"),
+    ("  : ยาว", "Amount " + ":" * 200 + "x"),
+    ("  .- สลับกันยาว", "Amount " + ".-" * 100 + "x"),
+    ("  เว้นวรรคสลับจุด", "Amount " + " ." * 100 + "x"),
+    ("  ช่องว่างยาว", "Amount" + " " * 1000 + "x"),
+    ("  THB ซ้ำๆ", "Amount " + "THB " * 100 + "x"),
+]:
+    started = time.perf_counter()
+    data = extract_data_from_caption(caption)
+    elapsed = time.perf_counter() - started
+    check(f"{label} -> เสร็จในไม่ถึง 0.5 วินาที", elapsed < 0.5, True)
+    check(f"{label} -> อ่านไม่ออกก็ส่งให้คนดู", data["amount"] is None
+          and "could not be read" in (data["amount_note"] or ""), True)
+
 print("\n=== caption ว่าง ===")
 for empty in ["", None, "   \n  "]:
     data = extract_data_from_caption(empty)
@@ -219,6 +260,11 @@ check("  มีคอมมา", parse_typed_amount("1,500.00"), 1500.0)
 check("  ติดหน่วยมาด้วย", parse_typed_amount("1500 THB"), 1500.0)
 check("  มีช่องว่างหน้าหลัง", parse_typed_amount("  2000  "), 2000.0)
 check("  ศูนย์ใช้ไม่ได้", parse_typed_amount("0"), None)
+# เคยเป็นบั๊ก: "-5" ถูกอ่านเป็น 5.00 แล้วไปลงชีทเงียบๆ
+check("  ติดลบใช้ไม่ได้", parse_typed_amount("-5"), None)
+check("  ติดลบมีคอมมา", parse_typed_amount("-1,500.00"), None)
+check("  ติดลบขีดยาว", parse_typed_amount("–500"), None)
+check("  .- ต่อท้ายไม่ใช่ลบ", parse_typed_amount("1,500.-"), 1500.0)
 check("  ไม่ใช่ตัวเลข", parse_typed_amount("ไม่รู้"), None)
 check("  ว่าง", parse_typed_amount(""), None)
 check("  None", parse_typed_amount(None), None)

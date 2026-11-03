@@ -581,6 +581,9 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = db.query(Transaction).filter(Transaction.status.in_(OPEN_STATUSES))
         if in_group:
             query = query.filter(Transaction.chat_id == chat_id)
+        # นับจาก query เดียวกับรายการ ตัวเลขหัวข้อจะได้ตรงกับรายการที่โชว์เสมอ
+        # (เคยนับแยกโดยกรองแชทนี้ตลอด พอเรียกในแชทส่วนตัวเลยขึ้น 0 ทั้งที่มีรายการ)
+        total_open = query.count()
         waiting = (
             query
             .order_by(Transaction.created_at.desc())
@@ -597,11 +600,6 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             for txn in waiting
         ]
-        total_open = (
-            db.query(Transaction)
-            .filter(Transaction.chat_id == chat_id, Transaction.status.in_(OPEN_STATUSES))
-            .count()
-        )
 
     if not rows:
         where = "in this chat" if in_group else "in any chat"

@@ -186,6 +186,73 @@ ok, err = sheets_service.append_to_sheet(rejected)
 check("คืนค่าสำเร็จแต่ไม่เขียน", (ok, len(worksheet.writes)), (True, 0))
 
 
+# ---------- ช่อง Trans ID ว่าง ต้องไม่ทำให้แถวถัดไปเขียนทับ ----------
+class GridWorksheet:
+    """เลียนแบบ Google จริงอีกจุด: col_values() ตัดช่องว่างท้ายคอลัมน์ทิ้ง
+
+    FakeWorksheet ข้างบนนับแถวจากจำนวนครั้งที่เขียน จึงมองไม่เห็นบั๊กนี้
+    """
+
+    def __init__(self):
+        self.cells = {}   # (row, col) -> value
+        self.id = 1
+        self.spreadsheet = MagicMock()
+        self._properties = {"sheetId": 1}
+
+    def col_values(self, index):
+        filled = [row for (row, col), value in self.cells.items()
+                  if col == index and str(value).strip()]
+        last = max(filled, default=0)
+        return [self.cells.get((row, index), "") for row in range(1, last + 1)]
+
+    def update(self, values, cell_range=None, **kwargs):
+        column, row = cell_range.split(":")[0][0], int(cell_range.split(":")[0][1:])
+        start = ord(column) - ord("A") + 1
+        for offset, value in enumerate(values[0]):
+            self.cells[(row, start + offset)] = value
+
+    def row(self, row, first_col=12):
+        return [self.cells.get((row, first_col + offset)) for offset in range(4)]
+
+    def __getattr__(self, name):
+        return MagicMock()
+
+
+def entry_without_id(batch_id, amount, category="VIP_WE", user_id=None):
+    """caption มีแค่ "User : ..." หรือไม่มีอะไรเลย และสลิปไม่มีชื่อผู้โอน"""
+    return SheetEntry(
+        batch_id=batch_id, category=category, status="Receive",
+        chat_trans_id=None, chat_fullname=None, sender_names=None,
+        chat_amount=amount, api_total_amount=None,
+        receiver_account="KKP-LS", chat_bank=None, chat_user_id=user_id,
+    )
+
+
+print("\n=== ไม่มีทั้ง Trans ID และชื่อ -> ใบถัดไปต้องไม่เขียนทับ ===")
+# เคยเป็นบั๊ก: ช่องแรกว่าง col_values เลยสั้นลง ใบถัดไปได้เลขแถวเดิมแล้วยอดของใบแรกหายจากชีท
+for category, first_col in (("VIP_WE", 12), ("VIP_12", 16)):
+    grid = GridWorksheet()
+    spreadsheet = MagicMock()
+    spreadsheet.worksheet.return_value = grid
+    sheets_service._get_dynamic_spreadsheet = lambda target=None, s=spreadsheet: s
+
+    sheets_service.append_to_sheet(entry_without_id("n1", 500.0, category))
+    sheets_service.append_to_sheet(entry_without_id("n2", 700.0, category, user_id="benz4455"))
+    sheets_service.append_to_sheet(entry(f"n3-{category}", category=category, trans_id="0000777"))
+    check(f"{category}: ใบแรกยังอยู่ ใส่ - แทนช่องว่าง", grid.row(1, first_col)[:2], ["-", 500.0])
+    check(f"  {category}: ไม่มี ID ใช้ชื่อผู้ใช้แทน", grid.row(2, first_col)[:2], ["benz4455", 700.0])
+    check(f"  {category}: ใบที่สามลงแถวใหม่", grid.row(3, first_col)[:2], ["0000777", 400.0])
+
+with SessionLocal() as db:
+    db.add(Transaction(
+        batch_id="snap_user", category="VIP_WE", status="Receive",
+        chat_id="-100111", msg_id="2", chat_user_id="benz4455", chat_amount=100.0,
+    ))
+    db.commit()
+    txn = db.query(Transaction).filter(Transaction.batch_id == "snap_user").first()
+    check("  SheetEntry คัดลอกชื่อผู้ใช้มาด้วย", SheetEntry.from_transaction(txn).chat_user_id, "benz4455")
+
+
 # ---------- bot ต้องไม่ค้างระหว่างรอ Google ----------
 async def check_event_loop_stays_free():
     print("\n=== event loop ต้องไม่ค้างระหว่างเขียนชีท ===")
